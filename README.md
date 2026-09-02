@@ -18,39 +18,118 @@ Adel KHALDOUN, Niels LALIN, Rabah NINI, Kévin PETIT, Mattéo RIQUE
 - Case à cocher pour certifier que le billet nominatif scanné est bien le nôtre
 - Filtrage des visiteurs sur des données déclaratives : taille, âge, handicap
 
-## Terminaisons API : 
+# Terminaisons API
 
-- POST /scan
-- body: ticketId
+## `POST /scan`
 
+Scanne un ticket.
 
-- POST /mapNewVisitor
-- body: ticketId, visitorId
+**Corps de la requête :**
 
+```json
+{
+  "ticketId": "string"
+}
+```
 
-- POST /appendToQueue
-- body: visitorId, queue
+---
 
+## `POST /mapNewVisitor`
 
-- POST /sendNotification
-- body: visitorPhoneNumber, possibly message
+Associe un nouveau visiteur à un ticket.
 
+**Corps de la requête :**
 
-- DELETE /popFromQueue
-- parameter: queue
+```json
+{
+  "ticketId": "string",
+  "visitorId": "string"
+}
+```
 
+---
 
-- DELETE /clearQueue
-- parameter: queue
+## `POST /appendToQueue`
 
- 
-- PATCH /pauseQueue
-- parameter/body: queue, paused
+Ajoute un visiteur à une file d’attente.
+
+**Corps de la requête :**
+
+```json
+{
+  "visitorId": "string",
+  "queue": "string"
+}
+```
+
+---
+
+## `POST /sendNotification`
+
+Envoie une notification à un visiteur.
+
+**Corps de la requête :**
+
+```json
+{
+  "visitorPhoneNumber": "string",
+  "message": "string"
+}
+```
+
+---
+
+## `DELETE /popFromQueue`
+
+Retire le prochain visiteur d’une file d’attente.
+
+**Paramètre :**
+
+- `queue` : string
+
+---
+
+## `DELETE /clearQueue`
+
+Vide une file d’attente.
+
+**Paramètre :**
+
+- `queue` : string
+
+---
+
+## `PATCH /pauseQueue`
+
+Met en pause ou reprend une file d’attente.
+
+**Corps de la requête :**
+
+```json
+{
+  "queue": "string",
+  "paused": true
+}
+```
+
+---
+
+## Résumé
+
+| Méthode | Endpoint | Paramètres |
+|---|---|---|
+| `POST` | `/scan` | `ticketId` |
+| `POST` | `/mapNewVisitor` | `ticketId`, `visitorId` |
+| `POST` | `/appendToQueue` | `visitorId`, `queue` |
+| `POST` | `/sendNotification` | `visitorPhoneNumber`, `message?` |
+| `DELETE` | `/popFromQueue` | `queue` |
+| `DELETE` | `/clearQueue` | `queue` |
+| `PATCH` | `/pauseQueue` | `queue`, `paused` |
 
 
 ## Modèle de données : 
 
-Voir le fichier `modele_bdd.png`
+![Modèle de données](./modele_bdd.png)
 
 
 ## Pages de l’application : 
