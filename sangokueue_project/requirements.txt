@@ -1,1 +1,2 @@
 Django==6.1.1
+psycopg==3.3.5
