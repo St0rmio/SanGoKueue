@@ -21,6 +21,9 @@ jobs:
       matrix:
         python-version: ["3.12", "3.13"]
 
+    env:
+      DB_PASSWORD: ci
+
     defaults:
       run:
         working-directory: sangokueue_project
