@@ -1,7 +1,0 @@
-# Backend 
-
---> "Django"
-
-# Frontend 
-
---> "Django"
