@@ -1,7 +1,7 @@
 # Backend 
 
---> "Spring boot"
+--> "Django"
 
 # Frontend 
 
---> "JavaScript"
+--> "Django"
