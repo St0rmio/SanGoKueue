@@ -1,7 +1,7 @@
 # Backend 
 
--> Spring boot
+--> "Spring boot"
 
 # Frontend 
 
--> JavaScript
+--> "JavaScript"
