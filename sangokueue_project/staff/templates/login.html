@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block title %}Connexion{% endblock %}
+
+{% block main %}
+
+<body class="bg-light">
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-12 col-md-6 col-lg-4">
+                
+                <div class="card shadow-sm">
+                    <div class="card-body p-4">
+                        <h2 class="text-center mb-4">Connexion</h2>
+                        
+                        <!-- erreur si les identifiants sont faux -->
+                        {% if error %}
+                            <div class="alert alert-danger" role="alert">
+                                {{ error }}
+                            </div>
+                        {% endif %}
+
+                        <!-- le formulaire pointe vers la vue elle-même -->
+                        <form method="POST" action="">
+                            <!-- sécurité Django nécessaire -->
+                            {% csrf_token %} 
+                            
+                            <div class="mb-3">
+                                <label for="username" class="form-label">Pseudo</label>
+                                <input type="text" class="form-control" id="username" name="username" required>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label for="password" class="form-label">Mot de passe</label>
+                                <input type="password" class="form-control" id="password" name="password" required>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary w-100">
+                                Se connecter
+                            </button>
+                        </form>
+                        
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+</body>
+
+{% endblock %}
