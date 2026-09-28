@@ -5,15 +5,16 @@ from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from django.http import HttpResponse
+from django.shortcuts import render
 
 from home.models import Billet, EnFile
 
 TEMPS_MOYEN_PAR_PERSONNE = 120
 
 
-def index(request):
-    return HttpResponse("Hello, world. You're at the home index.")
-
+def home(request):
+    return render(request, 'home.html')
 
 def _personnes_devant(entree):
     """Visiteurs déjà en attente qui passeront avant cette entrée."""
