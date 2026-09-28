@@ -4,6 +4,7 @@ from django.db import IntegrityError, transaction
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods, require_POST
 from django.views.decorators.http import require_POST
 from django.http import HttpResponse
 from django.shortcuts import render
@@ -104,4 +105,40 @@ def append_to_queue(request):
             "notification": _message_notification(position, secondes),
         },
         status=201,
+    )
+
+
+MESSAGE_FILE_VIDEE = "La file a été vidée. Vous n'êtes plus en attente."
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def clear_queue(request):
+    """Retire immédiatement tous les visiteurs d'une file et les notifie."""
+    queue = request.GET.get("queue")
+    if not isinstance(queue, str) or not queue.strip():
+        return _erreur("queue est requis.", 400)
+
+    queue = queue.strip()
+    entrees = list(
+        EnFile.objects.filter(nom_file=queue)
+        .select_related("numero_de_billet")
+        .order_by("date_entree", "pk")
+    )
+    notifications = [
+        {
+            "visitorId": entree.numero_de_billet_id,
+            "message": MESSAGE_FILE_VIDEE,
+        }
+        for entree in entrees
+    ]
+    if entrees:
+        EnFile.objects.filter(pk__in=[entree.pk for entree in entrees]).delete()
+
+    return JsonResponse(
+        {
+            "queue": queue,
+            "removed": len(notifications),
+            "notifications": notifications,
+        }
     )
