@@ -11,7 +11,7 @@ def login_view(request):
         user = authenticate(request, username=username, password=password)
         if user is not None:
             login(request, user)
-            return redirect('staff')
+            return redirect('staff:staff')
         else:
             # Return an 'invalid login' error message.
             return render(request, 'login.html', { 'error': "Mauvais pseudo ou mot de passe" } ) 
