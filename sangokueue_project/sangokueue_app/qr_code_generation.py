@@ -116,7 +116,8 @@ def generer_qr_code(
     )
 
     chemin_image = dossier_sortie / f"billet_{billet['id']}.png"
-    image.save(chemin_image)
+    # OpenCV ne détecte pas toujours les PNG 1 bit produits par défaut.
+    image.convert("RGB").save(chemin_image)
 
     return chemin_image
 
