@@ -1,4 +1,4 @@
-{% extends 'home/base.html' %}
+{% extends 'base.html' %}
 
 {% block title %}Connexion{% endblock %}
 
@@ -13,16 +13,16 @@
                     <div class="card-body p-4">
                         <h2 class="text-center mb-4">Connexion</h2>
                         
-                        <!-- Affichage de l'erreur si les identifiants sont faux -->
-                        {% if erreur %}
+                        <!-- erreur si les identifiants sont faux -->
+                        {% if error %}
                             <div class="alert alert-danger" role="alert">
-                                {{ erreur }}
+                                {{ error }}
                             </div>
                         {% endif %}
 
-                        <!-- Le formulaire pointe vers la vue elle-même -->
+                        <!-- le formulaire pointe vers la vue elle-même -->
                         <form method="POST" action="">
-                            <!-- Obligatoire dans Django pour la sécurité -->
+                            <!-- sécurité Django nécessaire -->
                             {% csrf_token %} 
                             
                             <div class="mb-3">

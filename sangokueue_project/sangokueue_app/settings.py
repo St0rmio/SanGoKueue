@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'home',
+    'staff',
 ]
 
 MIDDLEWARE = [
@@ -144,3 +145,8 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+
+
+# Redirection when not logged with login_required on view
+
+LOGIN_URL = 'staff:login'
