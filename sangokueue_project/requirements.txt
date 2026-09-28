@@ -1,11 +1,13 @@
 asgiref==3.12.1
 Django==6.1.1
-psycopg==3.3.5
-psycopg-binary==3.3.5
-python-dotenv==1.1.1
-sqlparse==0.6.0
 django-htmx==1.29.0
+hiredis==3.4.1
 numpy==2.5.3
 opencv-python-headless==5.0.0.93
 pillow==12.3.0
+psycopg==3.3.5
+psycopg-binary==3.3.5
+python-dotenv==1.1.1
 qrcode==8.2
+redis==8.1.0
+sqlparse==0.6.0
