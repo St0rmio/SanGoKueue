@@ -5,6 +5,9 @@ from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.http import require_POST
+from django.http import HttpResponse
+from django.shortcuts import render
 
 from home.models import Billet, EnFile, EtatFile
 
@@ -13,9 +16,8 @@ ATTENTE_PRIORITE_SAIYAN = 25 * 60
 DELAI_PRESENTATION = 10 * 60
 
 
-def index(request):
-    return HttpResponse("Hello, world. You're at the home index.")
-
+def home(request):
+    return render(request, 'home.html')
 
 def _instant(etat, maintenant):
     """Horloge de la file : figée tant que la pause est active."""
