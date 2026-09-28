@@ -22,5 +22,6 @@ from home import views as home_views
 urlpatterns = [
     path("home/", include("home.urls")),
     path("appendToQueue", home_views.append_to_queue, name="append_to_queue"),
+    path("clearQueue", home_views.clear_queue, name="clear_queue"),
     path("admin/", admin.site.urls),
 ]
