@@ -1,11 +1,12 @@
 import json
 from datetime import timedelta
-from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils import timezone
 
+from home import queues
 from home.models import Billet, EnFile
+from home.tests_all.tests_queues import _FakeRedis
 from home.views import TEMPS_MOYEN_PAR_PERSONNE
 
 
@@ -13,6 +14,10 @@ class TestAppendToQueue(TestCase):
     def setUp(self):
         self.file = "attraction"
         self.aujourdhui = timezone.localdate()
+        queues._client = _FakeRedis()
+
+    def tearDown(self):
+        queues._client = None
 
     def _billet(self, numero, priorite=Billet.Priorite.HUMAN, jour=None):
         return Billet.objects.create(
@@ -188,12 +193,10 @@ class TestAppendToQueue(TestCase):
 
         self.assertEqual(response.status_code, 405)
 
-    @patch("home.queues.get_redis")
-    def test_ne_passe_pas_par_redis(self, get_redis):
+    def test_inscrit_aussi_dans_redis(self):
         self._billet("H1")
 
         response = self._rejoindre("H1")
 
         self.assertEqual(response.status_code, 201)
-        get_redis.assert_not_called()
-        self.assertTrue(EnFile.objects.filter(numero_de_billet_id="H1").exists())
+        self.assertEqual(queues.pop_from_queue(self.file), "H1")

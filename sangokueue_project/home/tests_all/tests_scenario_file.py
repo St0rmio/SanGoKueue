@@ -4,8 +4,10 @@ from unittest.mock import patch
 from django.test import TestCase
 from django.utils import timezone
 
+from home import queues
 from home.models import Billet, EnFile, EtatFile
 from home.tests_all.tests_pause_queue import _Horloge
+from home.tests_all.tests_queues import _FakeRedis
 from home.views import ATTENTE_PRIORITE_SAIYAN, MESSAGE_FILE_VIDEE, TEMPS_MOYEN_PAR_PERSONNE
 
 
@@ -17,6 +19,7 @@ class TestScenarioFile(TestCase):
         self.horloge = _Horloge()
         self.time_patcher = patch("django.utils.timezone.now", self.horloge.now)
         self.time_patcher.start()
+        queues._client = _FakeRedis()
         self.visiteurs = [
             ("H1", Billet.Priorite.HUMAN),
             ("S1", Billet.Priorite.SAIYAN),
@@ -32,6 +35,7 @@ class TestScenarioFile(TestCase):
 
     def tearDown(self):
         self.time_patcher.stop()
+        queues._client = None
 
     def _rejoindre(self, numero, priorite):
         Billet.objects.create(

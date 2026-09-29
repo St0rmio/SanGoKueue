@@ -1,13 +1,19 @@
 from django.test import TestCase
 from django.utils import timezone
 
+from home import queues
 from home.models import Billet, EnFile
+from home.tests_all.tests_queues import _FakeRedis
 
 
 class TestLeaveQueue(TestCase):
     def setUp(self):
         self.file = "attraction"
         self.aujourdhui = timezone.localdate()
+        queues._client = _FakeRedis()
+
+    def tearDown(self):
+        queues._client = None
 
     def _billet(self, numero):
         return Billet.objects.create(
@@ -32,6 +38,7 @@ class TestLeaveQueue(TestCase):
 
     def test_un_participant_peut_quitter_la_file(self):
         self._entrer("H1")
+        queues.append_to_queue(self.file, "H1", Billet.Priorite.HUMAN)
 
         response = self._quitter("H1")
 
@@ -47,6 +54,7 @@ class TestLeaveQueue(TestCase):
                 nom_file=self.file,
             ).exists()
         )
+        self.assertIsNone(queues.pop_from_queue(self.file))
 
     def test_le_billet_n_est_pas_supprime(self):
         self._entrer("H1")

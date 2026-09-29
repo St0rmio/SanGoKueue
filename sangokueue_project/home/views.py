@@ -9,6 +9,7 @@ from django.views.decorators.http import require_POST
 from django.http import HttpResponse
 from django.shortcuts import render
 
+from home import queues
 from home.models import Billet, EnFile, EtatFile
 
 TEMPS_MOYEN_PAR_PERSONNE = 120
@@ -163,6 +164,7 @@ def append_to_queue(request):
                 numero_de_billet=billet,
                 nom_file=queue,
             )
+            queues.append_to_queue(queue, visitor_id, billet.priorite)
     except IntegrityError:
         return _erreur("Ce billet est déjà dans la file.", 409)
 
@@ -206,12 +208,15 @@ def leave_queue(request):
         return _erreur("Ce billet n'est pas dans la file.", 404)
 
     entree.delete()
+    queues.remove_from_queue(queue, visitor_id)
 
     return JsonResponse({
         "visitorId": visitor_id,
         "queue": queue,
         "left": True,
     })
+
+
 MESSAGE_FILE_VIDEE = "La file a été vidée. Vous n'êtes plus en attente."
 
 
@@ -238,6 +243,10 @@ def clear_queue(request):
     ]
     if entrees:
         EnFile.objects.filter(pk__in=[entree.pk for entree in entrees]).delete()
+    queues.clear_queue(queue)
+    etat = EtatFile.objects.filter(nom_file=queue).first()
+    if etat is not None and etat.en_pause:
+        queues.pause_queue(queue, True)
 
     return JsonResponse(
         {
@@ -348,6 +357,7 @@ def pause_queue(request):
             etat.save(update_fields=["en_pause", "mise_en_pause_le"])
         elif not paused and etat.en_pause:
             _reprendre(queue, etat, maintenant)
+        queues.pause_queue(queue, etat.en_pause)
 
     return JsonResponse({
         "queue": queue,
