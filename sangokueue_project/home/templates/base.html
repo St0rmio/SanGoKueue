@@ -1,10 +1,114 @@
-<!-- base.html -->
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="fr">
+
 <head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>
+        {% block title %}
+            SANGOKUEUE
+        {% endblock %}
+    </title>
+
+    <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    <!-- CSS principal -->
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+
+    {% block extra_head %}
+    {% endblock %}
 </head>
 
-<script>
-  document.body.addEventListener('htmx:configRequest', (event) => {
-    event.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
-  });
-</script>
+
+<body>
+
+    <!-- ==================== -->
+    <!-- HEADER                -->
+    <!-- ==================== -->
+
+    <header class="site-header">
+
+        <div class="header-container">
+
+            <!-- Logo / nom du site -->
+            <a href="/" class="site-logo">
+                SANGOKUEUE
+            </a>
+
+
+            <!-- Navigation -->
+            <nav class="main-navigation">
+
+                <a href="/">
+                    Accueil
+                </a>
+
+                <a href="#">
+                    Billets
+                </a>
+
+                <a href="#">
+                    Scanner
+                </a>
+
+            </nav>
+
+        </div>
+
+    </header>
+
+
+    <!-- ==================== -->
+    <!-- CONTENU PRINCIPAL     -->
+    <!-- ==================== -->
+
+    <main class="site-main">
+
+        {% block content %}
+        {% endblock %}
+
+    </main>
+
+
+    <!-- ==================== -->
+    <!-- FOOTER                -->
+    <!-- ==================== -->
+
+    <footer class="site-footer">
+
+        <div class="footer-container">
+
+            <p>
+                &copy; {% now "Y" %} SANGOKUEUE
+            </p>
+
+            <p>
+                Projet Django
+            </p>
+
+        </div>
+
+    </footer>
+
+
+    <!-- ==================== -->
+    <!-- SCRIPTS               -->
+    <!-- ==================== -->
+
+    <script>
+        document.body.addEventListener('htmx:configRequest', (event) => {
+            event.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
+        });
+    </script>
+
+    {% block extra_js %}
+    {% endblock %}
+
+</body>
+
+</html>

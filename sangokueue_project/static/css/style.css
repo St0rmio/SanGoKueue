@@ -1,0 +1,93 @@
+/* =========================
+   GENERAL
+   ========================= */
+
+   * {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f5f5f5;
+    color: #222;
+}
+
+
+/* =========================
+   HEADER
+   ========================= */
+
+.site-header {
+    background-color: #111;
+    color: white;
+}
+
+.header-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.site-logo {
+    color: white;
+    text-decoration: none;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.main-navigation {
+    display: flex;
+    gap: 25px;
+}
+
+.main-navigation a {
+    color: white;
+    text-decoration: none;
+}
+
+.main-navigation a:hover {
+    text-decoration: underline;
+}
+
+
+/* =========================
+   MAIN
+   ========================= */
+
+.site-main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 20px;
+
+    min-height: calc(100vh - 160px);
+}
+
+
+/* =========================
+   FOOTER
+   ========================= */
+
+.site-footer {
+    background-color: #111;
+    color: white;
+}
+
+.footer-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+
+    display: flex;
+    justify-content: space-between;
+}
