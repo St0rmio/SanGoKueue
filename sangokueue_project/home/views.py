@@ -1,7 +1,7 @@
 import json
 
 from django.db import IntegrityError, transaction
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
@@ -15,10 +15,82 @@ from home.models import Billet, EnFile, EtatFile
 TEMPS_MOYEN_PAR_PERSONNE = 120
 ATTENTE_PRIORITE_SAIYAN = 25 * 60
 DELAI_PRESENTATION = 10 * 60
+QUEUE_NAME = "attraction"
 
 
 def home(request):
     return render(request, 'home.html')
+
+
+def _join_queue(billet):
+    """Place le billet dans la file unique. None si le billet est expiré."""
+    if billet.date < timezone.localdate():
+        return None
+    entree = EnFile.objects.filter(
+        numero_de_billet=billet,
+        nom_file=QUEUE_NAME,
+    ).first()
+    if entree is not None:
+        return entree
+    try:
+        with transaction.atomic():
+            entree = EnFile.objects.create(
+                numero_de_billet=billet,
+                nom_file=QUEUE_NAME,
+            )
+            queues.append_to_queue(QUEUE_NAME, billet.pk, billet.priorite)
+            return entree
+    except IntegrityError:
+        return EnFile.objects.get(numero_de_billet=billet, nom_file=QUEUE_NAME)
+
+
+def _wait_context(billet, entree):
+    if entree is None:
+        return {
+            "billet": billet,
+            "expire": billet.date < timezone.localdate(),
+            "absent": True,
+        }
+    if entree.appele:
+        etat = EtatFile.objects.filter(nom_file=entree.nom_file).first()
+        restant = _secondes_restantes_appel(entree, etat, timezone.now())
+        position = None
+        attente_minutes = (restant or 0) // 60
+    else:
+        devant = _personnes_devant(entree)
+        position = devant + 1
+        attente_minutes = (devant * TEMPS_MOYEN_PAR_PERSONNE) // 60
+    return {
+        "billet": billet,
+        "position": position,
+        "attente_minutes": attente_minutes,
+        "appele": entree.appele,
+    }
+
+
+def visitor(request, numero=None):
+    """Affiche l'espace visiteur et l'inscrit dans la file."""
+    numero = (numero or request.GET.get("billet") or "").strip()
+    if not numero:
+        return render(request, "interface_visiteur.html", {"billet": None})
+
+    try:
+        billet = Billet.objects.get(pk=numero)
+    except Billet.DoesNotExist:
+        raise Http404("Billet introuvable.")
+
+    refreshing = bool(request.headers.get("HX-Request"))
+    if refreshing:
+        entree = EnFile.objects.filter(
+            numero_de_billet=billet,
+            nom_file=QUEUE_NAME,
+        ).first()
+    else:
+        entree = _join_queue(billet)
+
+    context = _wait_context(billet, entree)
+    template = "visitor_position.html" if refreshing else "interface_visiteur.html"
+    return render(request, template, context)
 
 def _instant(etat, maintenant):
     """Horloge de la file : figée tant que la pause est active."""
@@ -183,6 +255,25 @@ def append_to_queue(request):
         status=201,
     )
 
+def remove_visitor(visitor_id, queue):
+    """Remove a ticket from a queue. None if it is not queued."""
+    try:
+        entree = EnFile.objects.get(
+            numero_de_billet_id=visitor_id,
+            nom_file=queue,
+        )
+    except EnFile.DoesNotExist:
+        return None
+
+    entree.delete()
+    queues.remove_from_queue(queue, visitor_id)
+    return {
+        "visitorId": visitor_id,
+        "queue": queue,
+        "left": True,
+    }
+
+
 @csrf_exempt
 @require_http_methods(["DELETE"])
 def leave_queue(request):
@@ -196,39 +287,17 @@ def leave_queue(request):
     if not isinstance(queue, str) or not queue.strip():
         return _erreur("queue est requis.", 400)
 
-    visitor_id = visitor_id.strip()
-    queue = queue.strip()
-
-    try:
-        entree = EnFile.objects.get(
-            numero_de_billet_id=visitor_id,
-            nom_file=queue,
-        )
-    except EnFile.DoesNotExist:
+    result = remove_visitor(visitor_id.strip(), queue.strip())
+    if result is None:
         return _erreur("Ce billet n'est pas dans la file.", 404)
-
-    entree.delete()
-    queues.remove_from_queue(queue, visitor_id)
-
-    return JsonResponse({
-        "visitorId": visitor_id,
-        "queue": queue,
-        "left": True,
-    })
+    return JsonResponse(result)
 
 
 MESSAGE_FILE_VIDEE = "La file a été vidée. Vous n'êtes plus en attente."
 
 
-@csrf_exempt
-@require_http_methods(["DELETE"])
-def clear_queue(request):
-    """Retire immédiatement tous les visiteurs d'une file et les notifie."""
-    queue = request.GET.get("queue")
-    if not isinstance(queue, str) or not queue.strip():
-        return _erreur("queue est requis.", 400)
-
-    queue = queue.strip()
+def clear_visitors(queue):
+    """Remove every visitor from a queue."""
     entrees = list(
         EnFile.objects.filter(nom_file=queue)
         .select_related("numero_de_billet")
@@ -247,14 +316,22 @@ def clear_queue(request):
     etat = EtatFile.objects.filter(nom_file=queue).first()
     if etat is not None and etat.en_pause:
         queues.pause_queue(queue, True)
+    return {
+        "queue": queue,
+        "removed": len(notifications),
+        "notifications": notifications,
+    }
 
-    return JsonResponse(
-        {
-            "queue": queue,
-            "removed": len(notifications),
-            "notifications": notifications,
-        }
-    )
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def clear_queue(request):
+    """Retire immédiatement tous les visiteurs d'une file et les notifie."""
+    queue = request.GET.get("queue")
+    if not isinstance(queue, str) or not queue.strip():
+        return _erreur("queue est requis.", 400)
+
+    return JsonResponse(clear_visitors(queue.strip()))
 
 
 def _duree_a_exclure(debut_chrono, debut_pause, maintenant):
@@ -346,7 +423,11 @@ def pause_queue(request):
     if not isinstance(paused, bool):
         return _erreur("paused est requis.", 400)
 
-    queue = queue.strip()
+    return JsonResponse(set_queue_pause(queue.strip(), paused))
+
+
+def set_queue_pause(queue, paused):
+    """Pause or resume a queue without advancing timers."""
     maintenant = timezone.now()
 
     with transaction.atomic():
@@ -359,8 +440,8 @@ def pause_queue(request):
             _reprendre(queue, etat, maintenant)
         queues.pause_queue(queue, etat.en_pause)
 
-    return JsonResponse({
+    return {
         "queue": queue,
         "paused": etat.en_pause,
         "notifications": _notifications_file(queue, etat, timezone.now()),
-    })
+    }
