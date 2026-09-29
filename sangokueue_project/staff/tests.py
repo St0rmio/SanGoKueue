@@ -53,7 +53,7 @@ class StaffInterfaceTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
-        self.assertLess(html.index("SS1"), html.index("H1"))
+        self.assertLess(html.index("Vegeta Prince"), html.index("Krilin Brief"))
         self.assertNotContains(response, "Yamcha")
         self.assertContains(response, "Vegeta Prince")
         self.assertContains(response, "Super Saiyan")
@@ -77,7 +77,7 @@ class StaffInterfaceTests(TestCase):
         )
         second = self.client.get("/staff/?queue=kamehouse", HTTP_HX_REQUEST="true")
         html = second.content.decode()
-        self.assertLess(html.index("SS1"), html.index("H1"))
+        self.assertLess(html.index("Vegeta Prince"), html.index("Krilin Brief"))
         self.assertContains(second, "2 visiteur(s)")
 
     def test_pause_and_resume(self):
