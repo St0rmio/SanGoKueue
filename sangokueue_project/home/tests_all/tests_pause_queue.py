@@ -29,9 +29,12 @@ class TestPauseQueue(TestCase):
         self.file = "attraction"
         self.aujourdhui = timezone.localdate()
         queues._client = _FakeRedis()
+        self.notification_patcher = patch("home.views.send_notification")
+        self.mock_send_notification = self.notification_patcher.start()
 
     def tearDown(self):
         queues._client = None
+        self.notification_patcher.stop()
 
     def _billet(self, numero, priorite=Billet.Priorite.HUMAN):
         return Billet.objects.create(
@@ -72,7 +75,19 @@ class TestPauseQueue(TestCase):
         self._entrer("SS1", priorite=Billet.Priorite.SUPER_SAIYAN)
 
         response = self._pause(True)
+        self.mock_send_notification.assert_any_call(
+            "SS1",
+            "La file est en pause. Position 1. Temps estimé : 0 min.",
+        )
+        self.mock_send_notification.assert_any_call(
+            "H1",
+            "La file est en pause. Position 2. Temps estimé : 2 min.",
+        )
 
+        self.assertEqual(
+            self.mock_send_notification.call_count,
+            2,
+        )
         self.assertEqual(response.status_code, 200)
         corps = response.json()
         self.assertEqual(corps["queue"], self.file)
@@ -90,9 +105,12 @@ class TestPauseQueue(TestCase):
     def test_reprend_la_file(self):
         self._entrer("H1")
         self._pause(True)
-
+        self.mock_send_notification.reset_mock()
         response = self._pause(False)
-
+        self.mock_send_notification.assert_called_once_with(
+            "H1",
+            "La file a repris. Position 1. Temps estimé : 0 min.",
+        )
         self.assertEqual(response.status_code, 200)
         corps = response.json()
         self.assertFalse(corps["paused"])

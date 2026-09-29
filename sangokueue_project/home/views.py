@@ -1,4 +1,5 @@
 import json
+import queue
 
 from django.db import IntegrityError, transaction
 from django.http import Http404, HttpResponse, JsonResponse
@@ -8,10 +9,9 @@ from django.views.decorators.http import require_http_methods, require_POST
 from django.views.decorators.http import require_POST
 from django.http import HttpResponse
 from django.shortcuts import render
-
 from home import queues
 from home.models import Billet, EnFile, EtatFile
-
+from home.notifications import send_notification
 TEMPS_MOYEN_PAR_PERSONNE = 120
 ATTENTE_PRIORITE_SAIYAN = 25 * 60
 DELAI_PRESENTATION = 10 * 60
@@ -310,6 +310,11 @@ def clear_visitors(queue):
         }
         for entree in entrees
     ]
+    for notification in notifications:
+        send_notification(
+            notification["visitorId"],
+            notification["message"],
+            )
     if entrees:
         EnFile.objects.filter(pk__in=[entree.pk for entree in entrees]).delete()
     queues.clear_queue(queue)
@@ -418,8 +423,10 @@ def pause_queue(request):
 
     queue = corps.get("queue")
     paused = corps.get("paused")
+
     if not isinstance(queue, str) or not queue.strip():
         return _erreur("queue est requis.", 400)
+
     if not isinstance(paused, bool):
         return _erreur("paused est requis.", 400)
 
@@ -432,16 +439,31 @@ def set_queue_pause(queue, paused):
 
     with transaction.atomic():
         etat, _cree = EtatFile.objects.get_or_create(nom_file=queue)
+
         if paused and not etat.en_pause:
             etat.en_pause = True
             etat.mise_en_pause_le = maintenant
             etat.save(update_fields=["en_pause", "mise_en_pause_le"])
+
         elif not paused and etat.en_pause:
             _reprendre(queue, etat, maintenant)
+
         queues.pause_queue(queue, etat.en_pause)
+
+    notifications = _notifications_file(
+        queue,
+        etat,
+        timezone.now(),
+    )
+
+    for notification in notifications:
+        send_notification(
+            notification["visitorId"],
+            notification["message"],
+        )
 
     return {
         "queue": queue,
         "paused": etat.en_pause,
-        "notifications": _notifications_file(queue, etat, timezone.now()),
-    }
+        "notifications": notifications,
+}

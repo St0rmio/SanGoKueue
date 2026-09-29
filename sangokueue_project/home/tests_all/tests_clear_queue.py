@@ -1,3 +1,4 @@
+from unittest.mock import patch
 from django.test import TestCase
 from django.utils import timezone
 
@@ -13,8 +14,12 @@ class TestClearQueue(TestCase):
         self.aujourdhui = timezone.localdate()
         queues._client = _FakeRedis()
 
+        self.notification_patcher = patch("home.views.send_notification")
+        self.mock_send_notification = self.notification_patcher.start()
+
     def tearDown(self):
         queues._client = None
+        self.notification_patcher.stop()
 
     def _billet(self, numero):
         return Billet.objects.create(
@@ -41,7 +46,19 @@ class TestClearQueue(TestCase):
         self._entrer("H2")
 
         response = self._vider()
+        self.mock_send_notification.assert_any_call(
+            "H1",
+            MESSAGE_FILE_VIDEE,
+        )
+        self.mock_send_notification.assert_any_call(
+            "H2",
+            MESSAGE_FILE_VIDEE,
+        )
 
+        self.assertEqual(
+            self.mock_send_notification.call_count,
+            2,
+        )
         self.assertEqual(response.status_code, 200)
         corps = response.json()
         self.assertEqual(corps["queue"], self.file)
