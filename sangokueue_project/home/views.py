@@ -183,6 +183,25 @@ def append_to_queue(request):
         status=201,
     )
 
+def remove_visitor(visitor_id, queue):
+    """Remove a ticket from a queue. None if it is not queued."""
+    try:
+        entree = EnFile.objects.get(
+            numero_de_billet_id=visitor_id,
+            nom_file=queue,
+        )
+    except EnFile.DoesNotExist:
+        return None
+
+    entree.delete()
+    queues.remove_from_queue(queue, visitor_id)
+    return {
+        "visitorId": visitor_id,
+        "queue": queue,
+        "left": True,
+    }
+
+
 @csrf_exempt
 @require_http_methods(["DELETE"])
 def leave_queue(request):
@@ -196,39 +215,17 @@ def leave_queue(request):
     if not isinstance(queue, str) or not queue.strip():
         return _erreur("queue est requis.", 400)
 
-    visitor_id = visitor_id.strip()
-    queue = queue.strip()
-
-    try:
-        entree = EnFile.objects.get(
-            numero_de_billet_id=visitor_id,
-            nom_file=queue,
-        )
-    except EnFile.DoesNotExist:
+    result = remove_visitor(visitor_id.strip(), queue.strip())
+    if result is None:
         return _erreur("Ce billet n'est pas dans la file.", 404)
-
-    entree.delete()
-    queues.remove_from_queue(queue, visitor_id)
-
-    return JsonResponse({
-        "visitorId": visitor_id,
-        "queue": queue,
-        "left": True,
-    })
+    return JsonResponse(result)
 
 
 MESSAGE_FILE_VIDEE = "La file a été vidée. Vous n'êtes plus en attente."
 
 
-@csrf_exempt
-@require_http_methods(["DELETE"])
-def clear_queue(request):
-    """Retire immédiatement tous les visiteurs d'une file et les notifie."""
-    queue = request.GET.get("queue")
-    if not isinstance(queue, str) or not queue.strip():
-        return _erreur("queue est requis.", 400)
-
-    queue = queue.strip()
+def clear_visitors(queue):
+    """Remove every visitor from a queue."""
     entrees = list(
         EnFile.objects.filter(nom_file=queue)
         .select_related("numero_de_billet")
@@ -247,14 +244,22 @@ def clear_queue(request):
     etat = EtatFile.objects.filter(nom_file=queue).first()
     if etat is not None and etat.en_pause:
         queues.pause_queue(queue, True)
+    return {
+        "queue": queue,
+        "removed": len(notifications),
+        "notifications": notifications,
+    }
 
-    return JsonResponse(
-        {
-            "queue": queue,
-            "removed": len(notifications),
-            "notifications": notifications,
-        }
-    )
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def clear_queue(request):
+    """Retire immédiatement tous les visiteurs d'une file et les notifie."""
+    queue = request.GET.get("queue")
+    if not isinstance(queue, str) or not queue.strip():
+        return _erreur("queue est requis.", 400)
+
+    return JsonResponse(clear_visitors(queue.strip()))
 
 
 def _duree_a_exclure(debut_chrono, debut_pause, maintenant):
@@ -346,7 +351,11 @@ def pause_queue(request):
     if not isinstance(paused, bool):
         return _erreur("paused est requis.", 400)
 
-    queue = queue.strip()
+    return JsonResponse(set_queue_pause(queue.strip(), paused))
+
+
+def set_queue_pause(queue, paused):
+    """Pause or resume a queue without advancing timers."""
     maintenant = timezone.now()
 
     with transaction.atomic():
@@ -359,8 +368,8 @@ def pause_queue(request):
             _reprendre(queue, etat, maintenant)
         queues.pause_queue(queue, etat.en_pause)
 
-    return JsonResponse({
+    return {
         "queue": queue,
         "paused": etat.en_pause,
         "notifications": _notifications_file(queue, etat, timezone.now()),
-    })
+    }

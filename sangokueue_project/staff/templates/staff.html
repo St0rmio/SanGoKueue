@@ -4,25 +4,94 @@
 
 {% block main %}
 
-<body class="bg-light">
-    <div class="container mt-5">
-        <div class="row justify-content-center">
-            <div class="col-12 col-md-6 col-lg-4">
-                
-                <div class="card shadow-sm">
-                    <div class="card-body p-4">
-                        <h2 class="text-center mb-4">Staff</h2>
-                        
-                        <p>Page administration staff à compléter</p>
-                        
-                        <a href={% url 'staff:logout' %}>Se déconnecter</a>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">Gestion des files</h1>
+        <p class="text-muted mb-0">Connecté en tant que {{ user.username }}</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{% url 'staff:logout' %}">Se déconnecter</a>
+</div>
 
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}alert-danger{% else %}alert-{{ message.tags }}{% endif %}" role="alert">
+            {{ message }}
+        </div>
+    {% endfor %}
+{% endif %}
+
+{% if not queues %}
+    <div class="card shadow-sm">
+        <div class="card-body p-4">
+            <p class="mb-0">Aucune file pour le moment. Elles apparaissent dès qu'un visiteur rejoint une attraction.</p>
+        </div>
+    </div>
+{% else %}
+    <div class="row g-4">
+        <div class="col-12 col-lg-3">
+            <div class="list-group shadow-sm">
+                {% for item in queues %}
+                    <a href="?queue={{ item.name|urlencode }}"
+                       class="list-group-item list-group-item-action d-flex justify-content-between align-items-center {% if queue and item.name == queue.name %}active{% endif %}">
+                        {{ item.name }}
+                        <span class="badge {% if queue and item.name == queue.name %}bg-light text-dark{% else %}bg-secondary{% endif %}">{{ item.total }}</span>
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-9">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+                        <div>
+                            <h2 class="h4 mb-1">{{ queue.name }}</h2>
+                            {% if queue.paused %}
+                                <span class="badge text-bg-warning">En pause</span>
+                            {% else %}
+                                <span class="badge text-bg-success">Active</span>
+                            {% endif %}
+                            <span class="text-muted ms-2">{{ queue.total }} visiteur(s)</span>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <form method="post" action="{% url 'staff:pause' %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="queue" value="{{ queue.name }}">
+                                {% if queue.paused %}
+                                    <input type="hidden" name="action" value="resume">
+                                    <button type="submit" class="btn btn-success">Reprendre</button>
+                                {% else %}
+                                    <input type="hidden" name="action" value="pause">
+                                    <button type="submit" class="btn btn-warning">Mettre en pause</button>
+                                {% endif %}
+                            </form>
+                            <form method="post" action="{% url 'staff:clear' %}"
+                                  onsubmit="return confirm('Vider la file « {{ queue.name }} » ? Tous les visiteurs seront retirés.');">
+                                {% csrf_token %}
+                                <input type="hidden" name="queue" value="{{ queue.name }}">
+                                <button type="submit" class="btn btn-danger" {% if queue.total == 0 %}disabled{% endif %}>
+                                    Vider la file
+                                </button>
+                            </form>
+                        </div>
                     </div>
+
+                    {% if queue.total == 0 %}
+                        <p class="mb-0 text-muted">Cette file est vide.</p>
+                    {% else %}
+                        {% if queue.waiting %}
+                            <h3 class="h6 text-uppercase text-muted">En attente</h3>
+                            {% include "staff_rows.html" with rows=queue.waiting %}
+                        {% endif %}
+                        {% if queue.called %}
+                            <h3 class="h6 text-uppercase text-muted {% if queue.waiting %}mt-4{% endif %}">Appelés</h3>
+                            {% include "staff_rows.html" with rows=queue.called %}
+                        {% endif %}
+                    {% endif %}
                 </div>
-                
             </div>
         </div>
     </div>
-</body>
+{% endif %}
 
 {% endblock %}
