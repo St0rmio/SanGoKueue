@@ -18,6 +18,16 @@
 {% endblock %}
 
 {% block main %}
+{% if not billet %}
+<div class="container py-4">
+  <h1 class="dbz-title">Ton billet</h1>
+  <form method="get" action="{% url 'visitor' %}" class="mt-4">
+    <label for="billet" class="form-label">Numéro de billet</label>
+    <input id="billet" name="billet" class="form-control mb-3" required>
+    <button type="submit" class="btn btn-primary">Entrer</button>
+  </form>
+</div>
+{% else %}
 <div class="container py-4">
 
   <!-- Carte du client : en haut à droite -->
@@ -35,21 +45,13 @@
       <div>
         <div class="fw-bold fs-5">{{ billet.prenom }} {{ billet.nom }}</div>
         <span class="profil-badge">{{ billet.get_priorite_display }}</span>
-        <div class="mt-2">
-          {% if attente_minutes is not None %}
-            Attente : environ <strong>{{ attente_minutes }} min</strong>
-            {% if nom_file %}<br><small>{{ nom_file }}</small>{% endif %}
-          {% else %}
-            Tu n'es dans aucune file
-          {% endif %}
-        </div>
       </div>
 
     </div>
   </div>
 
-  <!-- Le reste de la page (attractions, file d'attente) viendra ici -->
-  <h1 class="dbz-title mt-4">Choisis ton attraction</h1>
+  {% include "visitor_position.html" %}
 
 </div>
+{% endif %}
 {% endblock %}

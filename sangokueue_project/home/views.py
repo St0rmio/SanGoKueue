@@ -1,7 +1,7 @@
 import json
 
 from django.db import IntegrityError, transaction
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
@@ -15,10 +15,82 @@ from home.models import Billet, EnFile, EtatFile
 TEMPS_MOYEN_PAR_PERSONNE = 120
 ATTENTE_PRIORITE_SAIYAN = 25 * 60
 DELAI_PRESENTATION = 10 * 60
+QUEUE_NAME = "attraction"
 
 
 def home(request):
     return render(request, 'home.html')
+
+
+def _join_queue(billet):
+    """Place le billet dans la file unique. None si le billet est expiré."""
+    if billet.date < timezone.localdate():
+        return None
+    entree = EnFile.objects.filter(
+        numero_de_billet=billet,
+        nom_file=QUEUE_NAME,
+    ).first()
+    if entree is not None:
+        return entree
+    try:
+        with transaction.atomic():
+            entree = EnFile.objects.create(
+                numero_de_billet=billet,
+                nom_file=QUEUE_NAME,
+            )
+            queues.append_to_queue(QUEUE_NAME, billet.pk, billet.priorite)
+            return entree
+    except IntegrityError:
+        return EnFile.objects.get(numero_de_billet=billet, nom_file=QUEUE_NAME)
+
+
+def _wait_context(billet, entree):
+    if entree is None:
+        return {
+            "billet": billet,
+            "expire": billet.date < timezone.localdate(),
+            "absent": True,
+        }
+    if entree.appele:
+        etat = EtatFile.objects.filter(nom_file=entree.nom_file).first()
+        restant = _secondes_restantes_appel(entree, etat, timezone.now())
+        position = None
+        attente_minutes = (restant or 0) // 60
+    else:
+        devant = _personnes_devant(entree)
+        position = devant + 1
+        attente_minutes = (devant * TEMPS_MOYEN_PAR_PERSONNE) // 60
+    return {
+        "billet": billet,
+        "position": position,
+        "attente_minutes": attente_minutes,
+        "appele": entree.appele,
+    }
+
+
+def visitor(request, numero=None):
+    """Affiche l'espace visiteur et l'inscrit dans la file."""
+    numero = (numero or request.GET.get("billet") or "").strip()
+    if not numero:
+        return render(request, "interface_visiteur.html", {"billet": None})
+
+    try:
+        billet = Billet.objects.get(pk=numero)
+    except Billet.DoesNotExist:
+        raise Http404("Billet introuvable.")
+
+    refreshing = bool(request.headers.get("HX-Request"))
+    if refreshing:
+        entree = EnFile.objects.filter(
+            numero_de_billet=billet,
+            nom_file=QUEUE_NAME,
+        ).first()
+    else:
+        entree = _join_queue(billet)
+
+    context = _wait_context(billet, entree)
+    template = "visitor_position.html" if refreshing else "interface_visiteur.html"
+    return render(request, template, context)
 
 def _instant(etat, maintenant):
     """Horloge de la file : figée tant que la pause est active."""
