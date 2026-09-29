@@ -181,7 +181,37 @@ def append_to_queue(request):
         status=201,
     )
 
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def leave_queue(request):
+    """Permet à un participant de quitter une file d'attente."""
+    visitor_id = request.GET.get("visitorId")
+    queue = request.GET.get("queue")
 
+    if not isinstance(visitor_id, str) or not visitor_id.strip():
+        return _erreur("visitorId est requis.", 400)
+
+    if not isinstance(queue, str) or not queue.strip():
+        return _erreur("queue est requis.", 400)
+
+    visitor_id = visitor_id.strip()
+    queue = queue.strip()
+
+    try:
+        entree = EnFile.objects.get(
+            numero_de_billet_id=visitor_id,
+            nom_file=queue,
+        )
+    except EnFile.DoesNotExist:
+        return _erreur("Ce billet n'est pas dans la file.", 404)
+
+    entree.delete()
+
+    return JsonResponse({
+        "visitorId": visitor_id,
+        "queue": queue,
+        "left": True,
+    })
 MESSAGE_FILE_VIDEE = "La file a été vidée. Vous n'êtes plus en attente."
 
 
