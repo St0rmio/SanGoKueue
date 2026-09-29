@@ -26,6 +26,8 @@ urlpatterns = [
     path("clearQueue", home_views.clear_queue, name="clear_queue"),
     path("pauseQueue", home_views.pause_queue, name="pause_queue"),
     path("admin/", admin.site.urls),
+    path("visiteur/", home_views.visitor, name="visitor"),
+    path("visiteur/<str:numero>/", home_views.visitor, name="visitor_billet"),
     path("home/", include("home.urls")),
     path("staff/", include("staff.urls")),
     path("", RedirectView.as_view(url="home/", permanent=True)),
