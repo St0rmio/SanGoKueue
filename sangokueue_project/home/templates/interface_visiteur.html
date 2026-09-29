@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block title %}Mon espace – SanGoKueue{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* Couleur de l'aura et du badge selon le statut (0 Humain, 1 Saiyan, 2 Super Saiyan) */
+  .statut-0 { --statut: #5b8ce0; }
+  .statut-1 { --statut: #f28a1e; }
+  .statut-2 { --statut: #ffd93b; }
+
+  .profil-aura { width: 64px; height: 64px; color: var(--statut); flex-shrink: 0; }
+  .statut-2 .profil-aura { filter: drop-shadow(0 0 8px #ffd93b); }
+
+  .profil-badge { display: inline-block; padding: .1rem .7rem; border-radius: 999px;
+    background: var(--statut); color: #0b1530; font-weight: 800; font-size: .9rem; }
+</style>
+{% endblock %}
+
+{% block main %}
+<div class="container py-4">
+
+  <!-- Carte du client : en haut à droite -->
+  <div class="d-flex justify-content-end">
+    <div class="dbz-card statut-{{ billet.priorite }} d-flex align-items-center gap-3 p-3">
+
+      <!-- Petite image : une aura dont la couleur dépend du statut -->
+      <svg class="profil-aura" viewBox="0 0 64 64" aria-hidden="true">
+        <path fill="currentColor"
+              d="M32 4C38 16 52 22 52 38C52 50 43 60 32 60C21 60 12 50 12 38C12 30 17 25 21 20C22 26 25 29 28 30C26 20 28 10 32 4Z"/>
+        <path fill="#fff" fill-opacity=".55" transform="translate(32 42) scale(.5) translate(-32 -42)"
+              d="M32 4C38 16 52 22 52 38C52 50 43 60 32 60C21 60 12 50 12 38C12 30 17 25 21 20C22 26 25 29 28 30C26 20 28 10 32 4Z"/>
+      </svg>
+
+      <div>
+        <div class="fw-bold fs-5">{{ billet.prenom }} {{ billet.nom }}</div>
+        <span class="profil-badge">{{ billet.get_priorite_display }}</span>
+        <div class="mt-2">
+          {% if attente_minutes is not None %}
+            Attente : environ <strong>{{ attente_minutes }} min</strong>
+            {% if nom_file %}<br><small>{{ nom_file }}</small>{% endif %}
+          {% else %}
+            Tu n'es dans aucune file
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Le reste de la page (attractions, file d'attente) viendra ici -->
+  <h1 class="dbz-title mt-4">Choisis ton attraction</h1>
+
+</div>
+{% endblock %}
