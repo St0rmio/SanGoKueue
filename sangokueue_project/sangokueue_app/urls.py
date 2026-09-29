@@ -16,11 +16,17 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import include, path
+from django.views.generic import RedirectView
 
 from home import views as home_views
 
 urlpatterns = [
-    path("home/", include("home.urls")),
     path("appendToQueue", home_views.append_to_queue, name="append_to_queue"),
+    path("leaveQueue", home_views.leave_queue, name="leave_queue"),
+    path("clearQueue", home_views.clear_queue, name="clear_queue"),
+    path("pauseQueue", home_views.pause_queue, name="pause_queue"),
     path("admin/", admin.site.urls),
+    path("home/", include("home.urls")),
+    path("staff/", include("staff.urls")),
+    path("", RedirectView.as_view(url="home/", permanent=True)),
 ]

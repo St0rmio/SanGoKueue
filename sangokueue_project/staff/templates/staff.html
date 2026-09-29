@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block title %}Staff{% endblock %}
+
+{% block main %}
+
+<body class="bg-light">
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-12 col-md-6 col-lg-4">
+                
+                <div class="card shadow-sm">
+                    <div class="card-body p-4">
+                        <h2 class="text-center mb-4">Staff</h2>
+                        
+                        <p>Page administration staff à compléter</p>
+                        
+                        <a href={% url 'staff:logout' %}>Se déconnecter</a>
+
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+</body>
+
+{% endblock %}
