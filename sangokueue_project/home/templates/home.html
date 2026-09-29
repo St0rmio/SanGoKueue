@@ -4,23 +4,27 @@
 
 {% block main %}
 
-<body class="bg-light">
-    <div class="container mt-5">
-        <div class="row justify-content-center">
-            <div class="col-12 col-md-6 col-lg-4">
-                
-                <div class="card shadow-sm">
-                    <div class="card-body p-4">
-                        <h2 class="text-center mb-4">SanGoKueue</h2>
-                        
-                        <p>Page principale à compléter</p>
-                        
-                    </div>
-                </div>
-                
-            </div>
-        </div>
+<div class="container py-5">
+  <h1 class="dbz-title text-center">Choisis ton camp</h1>
+  <p class="dbz-lead text-center mb-5">Rejoins la file d'une attraction sans user toute ton énergie debout.</p>
+
+  <div class="row g-4 justify-content-center">
+    <div class="col-12 col-md-6 col-lg-5">
+      <a href="/visiteur/" class="dbz-card dbz-card-visitor d-flex flex-column h-100 p-4 text-decoration-none">
+        <h2 class="dbz-card-title">Visiteur</h2>
+        <p class="flex-grow-1">Scanne ton billet à l'arcade et réserve ta place dans la file d'une attraction.</p>
+        <span class="btn btn-dbz align-self-start">Entrer</span>
+      </a>
     </div>
-</body>
+
+    <div class="col-12 col-md-6 col-lg-5">
+      <a href="/connexion/" class="dbz-card dbz-card-staff d-flex flex-column h-100 p-4 text-decoration-none">
+        <h2 class="dbz-card-title">Staff</h2>
+        <p class="flex-grow-1">Connecte-toi avec ton identifiant et ton mot de passe pour gérer la file de ton attraction.</p>
+        <span class="btn btn-dbz btn-dbz-blue align-self-start">Entrer</span>
+      </a>
+    </div>
+  </div>
+</div>
 
 {% endblock %}
