@@ -1,0 +1,33 @@
+.bg-skyblue {
+    background-color: #f19820 !important;
+}
+
+.dbz-font {
+    font-family: 'Bangers', cursive;
+    color: #ed0805;
+    text-shadow: 2px 2px 0 #FFD700, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+    letter-spacing: 2px;
+    font-size: 2.2rem;
+}
+
+.camera-box {
+    background-color: #1a1a1a;
+    border: 3px dashed #87CEEB;
+    border-radius: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+}
+
+.btn-dbz {
+    background-color: #FF7F00;
+    border-color: #E67300;
+    color: white;
+    font-weight: bold;
+}
+.btn-dbz:hover {
+    background-color: #E67300;
+    color: white;
+}
