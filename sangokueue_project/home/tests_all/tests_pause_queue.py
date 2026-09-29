@@ -5,7 +5,9 @@ from unittest.mock import patch
 from django.test import TestCase
 from django.utils import timezone
 
+from home import queues
 from home.models import Billet, EnFile, EtatFile
+from home.tests_all.tests_queues import _FakeRedis
 from home.views import ATTENTE_PRIORITE_SAIYAN, DELAI_PRESENTATION
 
 
@@ -26,6 +28,10 @@ class TestPauseQueue(TestCase):
     def setUp(self):
         self.file = "attraction"
         self.aujourdhui = timezone.localdate()
+        queues._client = _FakeRedis()
+
+    def tearDown(self):
+        queues._client = None
 
     def _billet(self, numero, priorite=Billet.Priorite.HUMAN):
         return Billet.objects.create(
@@ -146,14 +152,17 @@ class TestPauseQueue(TestCase):
 
         self.assertEqual(response.status_code, 405)
 
-    @patch("home.queues.get_redis")
-    def test_ne_passe_pas_par_redis(self, get_redis):
+    def test_met_aussi_redis_en_pause(self):
         self._entrer("H1")
 
         response = self._pause(True)
 
         self.assertEqual(response.status_code, 200)
-        get_redis.assert_not_called()
+        self.assertTrue(queues.is_paused(self.file))
+
+        self._pause(False)
+
+        self.assertFalse(queues.is_paused(self.file))
 
 
 class TestPauseQueueHorloge(TestCase):
@@ -162,9 +171,11 @@ class TestPauseQueueHorloge(TestCase):
         self.horloge = _Horloge()
         self.time_patcher = patch("django.utils.timezone.now", self.horloge.now)
         self.time_patcher.start()
+        queues._client = _FakeRedis()
 
     def tearDown(self):
         self.time_patcher.stop()
+        queues._client = None
 
     def _entrer(self, numero, priorite=Billet.Priorite.HUMAN, appele=False, date_appel=None):
         Billet.objects.create(

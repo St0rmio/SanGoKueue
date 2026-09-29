@@ -1,9 +1,9 @@
-from unittest.mock import patch
-
 from django.test import TestCase
 from django.utils import timezone
 
+from home import queues
 from home.models import Billet, EnFile
+from home.tests_all.tests_queues import _FakeRedis
 from home.views import MESSAGE_FILE_VIDEE
 
 
@@ -11,6 +11,10 @@ class TestClearQueue(TestCase):
     def setUp(self):
         self.file = "attraction"
         self.aujourdhui = timezone.localdate()
+        queues._client = _FakeRedis()
+
+    def tearDown(self):
+        queues._client = None
 
     def _billet(self, numero):
         return Billet.objects.create(
@@ -95,12 +99,11 @@ class TestClearQueue(TestCase):
         self.assertEqual(response.status_code, 405)
         self.assertEqual(EnFile.objects.count(), 0)
 
-    @patch("home.queues.get_redis")
-    def test_ne_passe_pas_par_redis(self, get_redis):
+    def test_vide_aussi_redis(self):
         self._entrer("H1")
+        queues.append_to_queue(self.file, "H1", Billet.Priorite.HUMAN)
 
         response = self._vider()
 
         self.assertEqual(response.status_code, 200)
-        get_redis.assert_not_called()
-        self.assertFalse(EnFile.objects.filter(nom_file=self.file).exists())
+        self.assertIsNone(queues.pop_from_queue(self.file))
