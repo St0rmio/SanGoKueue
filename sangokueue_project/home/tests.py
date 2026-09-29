@@ -5,5 +5,5 @@ from home.tests_all.tests_pause_queue import *
 from home.tests_all.tests_qr_code import *
 from home.tests_all.tests_queues import *
 from home.tests_all.tests_scenario_file import *
-
+from home.tests_all.tests_leave_queue import *
 # Create your tests here.
