@@ -462,8 +462,8 @@ def set_queue_pause(queue, paused):
             notification["message"],
         )
 
-    return JsonResponse({
+    return {
         "queue": queue,
         "paused": etat.en_pause,
         "notifications": notifications,
-    })
+}
