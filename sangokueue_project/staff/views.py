@@ -118,7 +118,8 @@ def staff_view(request):
     if selected not in names:
         selected = names[0] if names else ""
     counts = _counts()
-    return render(request, "staff.html", {
+    template = "staff_board.html" if request.headers.get("HX-Request") else "staff.html"
+    return render(request, template, {
         "queues": [{"name": name, "total": counts.get(name, 0)} for name in names],
         "queue": _queue_detail(selected) if selected else None,
     })

@@ -57,6 +57,28 @@ class StaffInterfaceTests(TestCase):
         self.assertNotContains(response, "Yamcha")
         self.assertContains(response, "Vegeta Prince")
         self.assertContains(response, "Super Saiyan")
+        self.assertContains(response, 'hx-trigger="every 2s"')
+
+    def test_board_updates_as_visitors_join(self):
+        self._join("H1", first="Krilin", last="Brief")
+
+        first = self.client.get("/staff/?queue=kamehouse", HTTP_HX_REQUEST="true")
+
+        self.assertEqual(first.status_code, 200)
+        self.assertContains(first, "Krilin Brief")
+        self.assertNotContains(first, "Vegeta")
+        self.assertNotContains(first, "<html")
+
+        self._join(
+            "SS1",
+            priority=Billet.Priorite.SUPER_SAIYAN,
+            first="Vegeta",
+            last="Prince",
+        )
+        second = self.client.get("/staff/?queue=kamehouse", HTTP_HX_REQUEST="true")
+        html = second.content.decode()
+        self.assertLess(html.index("SS1"), html.index("H1"))
+        self.assertContains(second, "2 visiteur(s)")
 
     def test_pause_and_resume(self):
         self._join("H1")
