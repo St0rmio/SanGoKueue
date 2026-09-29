@@ -22,6 +22,7 @@
 
   <h2 class="h4 text-center fw-bold mb-3 text-dark">Entrez votre numéro de billet</h2>
     <form action="#" method="POST" class="px-2">
+      {% csrf_token %} 
       <div class="mb-3">
         <input type="text" class="form-control form-control-lg text-center shadow-sm" placeholder="Ex: Billet-12345" required>
       </div>

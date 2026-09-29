@@ -1,10 +1,10 @@
 .bg-skyblue {
-    background-color: #87CEEB !important;
+    background-color: #f19820 !important;
 }
 
 .dbz-font {
     font-family: 'Bangers', cursive;
-    color: #FF2400;
+    color: #ed0805;
     text-shadow: 2px 2px 0 #FFD700, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
     letter-spacing: 2px;
     font-size: 2.2rem;
