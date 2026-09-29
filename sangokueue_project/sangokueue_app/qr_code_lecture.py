@@ -58,17 +58,34 @@ def _charger_image(chemin_image: str | Path):
     return image
 
 
+def _candidats_qr(image):
+    if image.ndim == 3:
+        gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gris = image
+    if int(gris.max()) <= 1:
+        gris = (gris * 255).astype("uint8")
+
+    agrandi = cv2.resize(
+        gris, None, fx=2, fy=2, interpolation=cv2.INTER_NEAREST,
+    )
+    borde = cv2.copyMakeBorder(
+        gris, 40, 40, 40, 40, cv2.BORDER_CONSTANT, value=255,
+    )
+    return (image, gris, agrandi, borde)
+
+
 def _decoder_qr_code(image) -> str:
     detecteur = cv2.QRCodeDetector()
 
-    donnees, points, _ = detecteur.detectAndDecode(image)
+    for candidat in _candidats_qr(image):
+        donnees, _points, _ = detecteur.detectAndDecode(candidat)
+        if donnees:
+            return donnees
 
-    if not donnees:
-        raise ErreurLectureBillet(
-            "Aucun QR code détecté dans l'image."
-        )
-
-    return donnees
+    raise ErreurLectureBillet(
+        "Aucun QR code détecté dans l'image."
+    )
 
 
 def lire_billet(chemin_image: str | Path) -> dict:

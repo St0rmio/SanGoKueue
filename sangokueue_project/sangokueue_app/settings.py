@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -29,7 +30,7 @@ SECRET_KEY = 'django-insecure-*cc*c@gr05l7q5kg5%jq@-#wdjo*97hzr5d^nr++^inw8#-ed+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [ 'localhost' ]
 
 
 # Application definition
@@ -42,6 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'home',
+    'staff',
 ]
 
 MIDDLEWARE = [
@@ -77,14 +79,39 @@ WSGI_APPLICATION = 'sangokueue_app.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-DATABASES = {
+ENV = os.environ.get("ENVIRONMENT", "development")
+
+if ENV == "production":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": "sangokueue",
+            "USER": "sangokueue_user",
+            "PASSWORD": os.environ["DB_PASSWORD"],
+            "HOST": "localhost",
+            "PORT": "5432",
+        }
+    }
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3", 
+        }
+    }
+
+if "test" in sys.argv:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
+    }
+
+CACHES = {
     "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": "sangokueue",
-        "USER": "sangokueue_user",
-        "PASSWORD": os.environ["DB_PASSWORD"],
-        "HOST": "localhost",
-        "PORT": "5432",
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": os.environ.get("REDIS_URL", "redis://127.0.0.1:6379"),
     }
 }
 
@@ -134,3 +161,8 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+
+
+# Redirection when not logged with login_required on view
+
+LOGIN_URL = 'staff:login'
