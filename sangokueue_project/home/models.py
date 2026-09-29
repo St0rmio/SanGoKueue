@@ -24,6 +24,9 @@ class EnFile(models.Model):
     date_entree = models.DateTimeField(auto_now_add=True)
     appele = models.BooleanField(default=False)
     deja_appele = models.BooleanField(default=False)
+    date_appel = models.DateTimeField(null=True, blank=True)
+    secondes_pause = models.PositiveIntegerField(default=0)
+    secondes_pause_appel = models.PositiveIntegerField(default=0)
 
     class Meta:
         constraints = [
@@ -32,3 +35,9 @@ class EnFile(models.Model):
                 name="unique_billet_dans_file",
             )
         ]
+
+
+class EtatFile(models.Model):
+    nom_file = models.CharField(max_length=64, primary_key=True)
+    en_pause = models.BooleanField(default=False)
+    mise_en_pause_le = models.DateTimeField(null=True, blank=True)
