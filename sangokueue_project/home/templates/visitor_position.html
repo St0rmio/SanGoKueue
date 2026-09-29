@@ -1,0 +1,18 @@
+<div id="visitor-position"
+     class="text-center mt-5"
+     hx-get="{% url 'visitor_billet' billet.pk %}"
+     hx-trigger="every 2s"
+     hx-swap="outerHTML">
+  {% if expire %}
+    <h1 class="dbz-title">Billet expiré</h1>
+  {% elif absent %}
+    <h1 class="dbz-title">Tu n'es plus dans la file</h1>
+  {% elif appele %}
+    <h1 class="dbz-title">Tu es appelé</h1>
+    <p class="fs-4">Il te reste {{ attente_minutes }} min pour te présenter.</p>
+  {% else %}
+    <h1 class="dbz-title">File d'attente</h1>
+    <p class="fs-4 mb-1">Position <strong>{{ position }}</strong></p>
+    <p class="fs-5">Attente : environ <strong>{{ attente_minutes }} min</strong></p>
+  {% endif %}
+</div>
