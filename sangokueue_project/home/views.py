@@ -17,6 +17,8 @@ TEMPS_MOYEN_PAR_PERSONNE = 40
 ATTENTE_PRIORITE_SAIYAN = 25 * 60
 DELAI_PRESENTATION = 10 * 60
 QUEUE_NAME = "attraction"
+SEUIL_NOTIFICATION_10_MIN = 10 * 60
+SEUIL_NOTIFICATION_5_MIN = 5 * 60
 
 
 def home(request):
@@ -340,6 +342,68 @@ def _formater_duree(secondes):
 
     return f"{secondes // 60} min"
 
+def _notification_attente_a_envoyer(entree):
+    if entree.appele:
+        return None
+
+    devant = _personnes_devant(entree)
+
+    if devant <= 0:
+        return None
+
+    position = devant + 1
+    secondes = devant * TEMPS_MOYEN_PAR_PERSONNE
+    temps = _formater_duree(secondes)
+
+    if devant == 1:
+        if entree.notification_prochain_envoyee:
+            return None
+
+        return {
+            "champ": "notification_prochain_envoyee",
+            "message": (
+                "Votre tour approche ! "
+                "Il ne reste plus qu'une personne devant vous. "
+                f"Temps estimé : {temps}. "
+                "Restez à proximité de l'entrée."
+            ),
+        }
+
+    if secondes <= SEUIL_NOTIFICATION_5_MIN:
+        if (
+            entree.notification_5min_envoyee
+            or entree.notification_prochain_envoyee
+        ):
+            return None
+
+        return {
+            "champ": "notification_5min_envoyee",
+            "message": (
+                "Votre tour approche. "
+                f"Position {position}. "
+                f"Temps estimé : {temps}. "
+                "Merci de vous rendre vers l'attraction."
+            ),
+        }
+
+    if secondes <= SEUIL_NOTIFICATION_10_MIN:
+        if (
+            entree.notification_10min_envoyee
+            or entree.notification_5min_envoyee
+            or entree.notification_prochain_envoyee
+        ):
+            return None
+
+        return {
+            "champ": "notification_10min_envoyee",
+            "message": (
+                "Votre tour approche. "
+                f"Position {position}. "
+                f"Temps estimé : {temps}."
+            ),
+        }
+
+    return None
 
 def _message_notification(position, secondes):
     return (
