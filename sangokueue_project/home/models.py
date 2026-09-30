@@ -29,6 +29,10 @@ class EnFile(models.Model):
     date_appel = models.DateTimeField(null=True, blank=True)
     secondes_pause = models.PositiveIntegerField(default=0)
     secondes_pause_appel = models.PositiveIntegerField(default=0)
+    notification_10min_envoyee = models.BooleanField(default=False)
+    notification_5min_envoyee = models.BooleanField(default=False)
+    notification_prochain_envoyee = models.BooleanField(default=False)
+    notification_appel_envoyee = models.BooleanField(default=False)
 
     class Meta:
         constraints = [
