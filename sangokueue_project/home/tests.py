@@ -1,3 +1,5 @@
+import json
+
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -52,7 +54,7 @@ class AffluenceAttractionTests(TestCase):
         self.billet_3 = EnFile.objects.create(numero_de_billet=b3, nom_file="Attraction 33", appele=False)
         
         # URL fictive pour le scan (à adapter selon ton urls.py, ici on utilise la PK de EnFile)
-        self.url_scan = reverse('staff:scanner_billet', args=[self.billet_1.id])
+        self.url_scan = reverse('staff:scan_billet')
 
         # 3. Création et connexion d'un compte Staff pour les tests
         self.staff_user = User.objects.create_superuser('staff_test', 'staff@test.com', 'password')
@@ -63,13 +65,17 @@ class AffluenceAttractionTests(TestCase):
         # Forcer le temps aléatoire à 60 secondes pour prévisibilité
         mock_randint.return_value = 60 
         
-        response = self.client.post(self.url_scan)
+        response = self.client.post(
+            self.url_scan,
+            data=json.dumps({'numero_billet': self.billet_1.numero_de_billet_id}),
+            content_type='application/json'
+        )
         
         self.assertEqual(response.status_code, 200)
         self.assertEqual(VisiteurEnAttraction.objects.count(), 1)
         
         visiteur = VisiteurEnAttraction.objects.first()
-        self.assertEqual(visiteur.billet, self.billet_1)
+        self.assertEqual(visiteur.billet, self.billet_1.numero_de_billet)
         
         # Vérifier que l'heure de sortie prévue est bien dans 60 secondes
         diff = visiteur.heure_sortie_prevue - visiteur.heure_entree
@@ -81,14 +87,18 @@ class AffluenceAttractionTests(TestCase):
             b = Billet.objects.create(numero_de_billet=f"X{i}", date=date.today(), prenom="X", nom="Y")
             ef = EnFile.objects.create(numero_de_billet=b, nom_file="Attraction 33", appele=False)
             VisiteurEnAttraction.objects.create(
-                billet=ef,
+                billet=b,  # Utilise directement la variable Billet créée juste au-dessus
                 heure_entree=timezone.now(),
                 heure_sortie_prevue=timezone.now() + timedelta(minutes=1)
             )
             
         # Tenter de scanner un 51ème billet (le self.billet_1)
-        url_scan_51 = reverse('staff:scanner_billet', args=[self.billet_1.id])
-        response = self.client.post(url_scan_51)
+        url_scan_51 = reverse('staff:scan_billet')
+        response = self.client.post(
+            url_scan_51,
+            data=json.dumps({'numero_billet': self.billet_1.numero_de_billet_id}),
+            content_type='application/json'
+        )
         
         # Vérifier le rejet (HTTP 400 Bad Request)
         self.assertEqual(response.status_code, 400)
@@ -98,7 +108,7 @@ class AffluenceAttractionTests(TestCase):
         # 1. Préparation : Un visiteur est entré il y a 2 minutes (temps écoulé)
         heure_passee = timezone.now() - timedelta(minutes=2)
         VisiteurEnAttraction.objects.create(
-            billet=self.billet_1,
+            billet=self.billet_1.numero_de_billet,
             heure_entree=heure_passee,
             heure_sortie_prevue=heure_passee + timedelta(minutes=1)
         )

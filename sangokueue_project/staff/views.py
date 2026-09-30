@@ -192,12 +192,19 @@ def staff_scan_billet(request):
             data = json.loads(request.body)
             numero_billet = data.get('numero_billet')
             
+            # 0. Vérification de la capacité maximale (50)
+            if VisiteurEnAttraction.objects.count() >= 50:
+                return JsonResponse({
+                    'status': 'error', 
+                    'message': "L'attraction est pleine (50 visiteurs maximum)."
+                }, status=400) # Ajout du statut HTTP 400
+
             # 1. Vérifier s'il est déjà dans l'attraction
             if VisiteurEnAttraction.objects.filter(billet_id=numero_billet).exists():
                 return JsonResponse({
                     'status': 'error', 
                     'message': "Ce visiteur est déjà dans l'attraction !"
-                })
+                }, status=400)
             
             # 2. Récupérer le billet dans la file d'attente
             en_file = EnFile.objects.get(numero_de_billet_id=numero_billet)
@@ -223,7 +230,7 @@ def staff_scan_billet(request):
             return JsonResponse({
                 'status': 'error', 
                 'message': "Billet invalide ou non présent dans la file d'attente."
-            })
+            }, status=400)
         
 
 def attraction_board(request):
