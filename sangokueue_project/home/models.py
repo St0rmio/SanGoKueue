@@ -50,4 +50,4 @@ class VisiteurEnAttraction(models.Model):
     heure_sortie_prevue = models.DateTimeField()
 
     def __str__(self):
-        return f"Billet {self.billet.id} - Sortie à {self.heure_sortie_prevue.strftime('%H:%M:%S')}"
+        return f"Billet {self.billet.numero_de_billet_id} - Sortie à {self.heure_sortie_prevue.strftime('%H:%M:%S')}"
