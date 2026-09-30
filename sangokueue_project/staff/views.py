@@ -1,4 +1,6 @@
 import json
+import random
+from datetime import timedelta
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -12,9 +14,15 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from home.models import Billet, EnFile, EtatFile, VisiteurEnAttraction
+from home.models import (
+    Billet,
+    EnFile,
+    EtatFile,
+    PushSubscription,
+    VisiteurEnAttraction,
+)
+from home.push_notifications import send_push_notification
 from home.views import (
-    CAPACITE_MAX,
     QUEUE_NAME,
     TEMPS_MOYEN_PAR_PERSONNE,
     _formater_duree,
@@ -24,10 +32,21 @@ from home.views import (
     clear_visitors,
     expirer_appels,
     places_disponibles,
+    envoyer_notifications_attente,
     remove_visitor,
     set_queue_pause,
     valider_entree,
+    CAPACITE_MAX,
 )
+
+
+CAPACITE_MAX = 50
+
+MESSAGE_APPEL = (
+    "C'est à vous ! "
+    "Présentez-vous maintenant à l'entrée de l'attraction."
+)
+
 
 PRIORITY_LABELS = {
     Billet.Priorite.HUMAN: "Humain",
@@ -39,21 +58,43 @@ PRIORITY_LABELS = {
 def login_view(request):
     if request.user.is_authenticated:
         return redirect("staff:staff")
+
     if request.method == "POST":
         username = request.POST["username"]
         password = request.POST["password"]
-        user = authenticate(request, username=username, password=password)
+
+        user = authenticate(
+            request,
+            username=username,
+            password=password,
+        )
+
         if user is not None:
             login(request, user)
             return redirect("staff:staff")
-        return render(request, "login.html", {"error": "Mauvais pseudo ou mot de passe"})
-    return render(request, "login.html")
+
+        return render(
+            request,
+            "login.html",
+            {
+                "error": "Mauvais pseudo ou mot de passe"
+            },
+        )
+
+    return render(
+        request,
+        "login.html",
+    )
 
 
 @login_required
 def logout_view(request):
     logout(request)
-    return render(request, "logout.html")
+
+    return render(
+        request,
+        "logout.html",
+    )
 
 
 def _queue_names():
@@ -65,22 +106,48 @@ def _queue_names():
 def _counts():
     return {
         row["nom_file"]: row["total"]
-        for row in EnFile.objects.values("nom_file").annotate(total=Count("pk"))
+        for row in (
+            EnFile.objects
+            .values("nom_file")
+            .annotate(total=Count("pk"))
+        )
     }
 
 
-def _line(entry, position, wait_seconds, remaining_call):
+def _line(
+    entry,
+    position,
+    wait_seconds,
+    remaining_call,
+):
     ticket = entry.numero_de_billet
+
     if remaining_call is not None:
         status = "Appelé"
-        detail = f"Il reste {_formater_duree(remaining_call)} pour se présenter"
+
+        detail = (
+            "Il reste "
+            f"{_formater_duree(remaining_call)} "
+            "pour se présenter"
+        )
+
     else:
         status = "En attente"
-        detail = _formater_duree(wait_seconds)
+
+        detail = _formater_duree(
+            wait_seconds
+        )
+
     return {
         "visitor_id": ticket.pk,
-        "name": f"{ticket.prenom} {ticket.nom}",
-        "priority": PRIORITY_LABELS.get(ticket.priorite, str(ticket.priorite)),
+        "name": (
+            f"{ticket.prenom} "
+            f"{ticket.nom}"
+        ),
+        "priority": PRIORITY_LABELS.get(
+            ticket.priorite,
+            str(ticket.priorite),
+        ),
         "position": position,
         "status": status,
         "detail": detail,
@@ -89,24 +156,76 @@ def _line(entry, position, wait_seconds, remaining_call):
 
 
 def _queue_detail(name):
-    state = EtatFile.objects.filter(nom_file=name).first()
+    state = EtatFile.objects.filter(
+        nom_file=name
+    ).first()
+
     now = timezone.now()
+
     entries = list(
-        EnFile.objects.filter(nom_file=name).select_related("numero_de_billet")
+        EnFile.objects.filter(
+            nom_file=name
+        ).select_related(
+            "numero_de_billet"
+        )
     )
+
     waiting = []
-    for position, entry in enumerate(_ordre_attente(entries, state, now), start=1):
-        waiting.append(_line(entry, position, (position - 1) * TEMPS_MOYEN_PAR_PERSONNE, None))
+
+    for position, entry in enumerate(
+        _ordre_attente(
+            entries,
+            state,
+            now,
+        ),
+        start=1,
+    ):
+        waiting.append(
+            _line(
+                entry,
+                position,
+                (
+                    position - 1
+                ) * TEMPS_MOYEN_PAR_PERSONNE,
+                None,
+            )
+        )
+
     called = []
+
     called_entries = sorted(
-        (entry for entry in entries if entry.appele),
-        key=lambda entry: (entry.date_appel or entry.date_entree, entry.pk),
+        (
+            entry
+            for entry in entries
+            if entry.appele
+        ),
+        key=lambda entry: (
+            entry.date_appel
+            or entry.date_entree,
+            entry.pk,
+        ),
     )
+
     for entry in called_entries:
-        called.append(_line(entry, None, None, _secondes_restantes_appel(entry, state, now)))
+        called.append(
+            _line(
+                entry,
+                None,
+                None,
+                _secondes_restantes_appel(
+                    entry,
+                    state,
+                    now,
+                ),
+            )
+        )
+
     return {
         "name": name,
-        "paused": bool(state and state.en_pause),
+        "paused": bool(
+            state
+            and state.en_pause
+        ),
         "waiting": waiting,
         "called": called,
         "total": len(entries),
@@ -116,9 +235,16 @@ def _queue_detail(name):
 
 
 def _back(queue):
-    url = reverse("staff:staff")
+    url = reverse(
+        "staff:staff"
+    )
+
     if queue:
-        url = f"{url}?{urlencode({'queue': queue})}"
+        url = (
+            f"{url}?"
+            f"{urlencode({'queue': queue})}"
+        )
+
     return redirect(url)
 
 
@@ -135,30 +261,80 @@ def _sync_appels(queue=None):
 @login_required
 def staff_view(request):
     names = _queue_names()
-    selected = (request.GET.get("queue") or "").strip()
+
+    selected = (
+        request.GET.get("queue")
+        or ""
+    ).strip()
+
     if selected not in names:
         selected = names[0] if names else ""
     if selected:
         _sync_appels(selected)
     counts = _counts()
-    template = "staff_board.html" if request.headers.get("HX-Request") else "staff.html"
-    return render(request, template, {
-        "queues": [{"name": name, "total": counts.get(name, 0)} for name in names],
-        "queue": _queue_detail(selected) if selected else None,
-    })
+
+    template = (
+        "staff_board.html"
+        if request.headers.get("HX-Request")
+        else "staff.html"
+    )
+
+    return render(
+        request,
+        template,
+        {
+            "queues": [
+                {
+                    "name": name,
+                    "total": counts.get(
+                        name,
+                        0,
+                    ),
+                }
+                for name in names
+            ],
+            "queue": (
+                _queue_detail(selected)
+                if selected
+                else None
+            ),
+        },
+    )
 
 
 @login_required
 @require_POST
 def pause_view(request):
-    queue = (request.POST.get("queue") or "").strip()
+    queue = (
+        request.POST.get("queue")
+        or ""
+    ).strip()
+
     if not queue:
-        messages.error(request, "Aucune file sélectionnée.")
-        return redirect("staff:staff")
-    paused = request.POST.get("action") == "pause"
-    result = set_queue_pause(queue, paused)
+        messages.error(
+            request,
+            "Aucune file sélectionnée.",
+        )
+
+        return redirect(
+            "staff:staff"
+        )
+
+    paused = (
+        request.POST.get("action")
+        == "pause"
+    )
+
+    result = set_queue_pause(
+        queue,
+        paused,
+    )
+
     if result["paused"]:
-        messages.success(request, f"La file « {queue} » est en pause.")
+        messages.success(
+            request,
+            f"La file « {queue} » est en pause.",
+        )
     else:
         messages.success(request, f"La file « {queue} » a repris.")
         _sync_appels(queue)
@@ -168,33 +344,76 @@ def pause_view(request):
 @login_required
 @require_POST
 def clear_view(request):
-    queue = (request.POST.get("queue") or "").strip()
+    queue = (
+        request.POST.get("queue")
+        or ""
+    ).strip()
+
     if not queue:
-        messages.error(request, "Aucune file sélectionnée.")
-        return redirect("staff:staff")
-    result = clear_visitors(queue)
+        messages.error(
+            request,
+            "Aucune file sélectionnée.",
+        )
+
+        return redirect(
+            "staff:staff"
+        )
+
+    result = clear_visitors(
+        queue
+    )
+
     messages.success(
         request,
-        f"{result['removed']} visiteur(s) retiré(s) de « {queue} ».",
+        (
+            f"{result['removed']} "
+            "visiteur(s) retiré(s) "
+            f"de « {queue} »."
+        ),
     )
+
     return _back(queue)
 
 
 @login_required
 @require_POST
 def remove_view(request):
-    queue = (request.POST.get("queue") or "").strip()
-    visitor_id = (request.POST.get("visitor_id") or "").strip()
+    queue = (
+        request.POST.get("queue")
+        or ""
+    ).strip()
+
+    visitor_id = (
+        request.POST.get("visitor_id")
+        or ""
+    ).strip()
+
     if not queue or not visitor_id:
-        messages.error(request, "Visiteur ou file manquant.")
+        messages.error(
+            request,
+            "Visiteur ou file manquant.",
+        )
+
         return _back(queue)
+
     entry = (
-        EnFile.objects.select_related("numero_de_billet")
-        .filter(numero_de_billet_id=visitor_id, nom_file=queue)
+        EnFile.objects
+        .select_related(
+            "numero_de_billet"
+        )
+        .filter(
+            numero_de_billet_id=visitor_id,
+            nom_file=queue,
+        )
         .first()
     )
+
     if entry is None:
-        messages.error(request, "Ce billet n'est pas dans la file.")
+        messages.error(
+            request,
+            "Ce billet n'est pas dans la file.",
+        )
+
         return _back(queue)
     name = f"{entry.numero_de_billet.prenom} {entry.numero_de_billet.nom}"
     remove_visitor(visitor_id, queue)
