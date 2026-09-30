@@ -1,6 +1,8 @@
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from django.contrib.auth.models import User
+
 from datetime import timedelta, date
 from unittest.mock import patch
 
@@ -19,7 +21,11 @@ class AffluenceAttractionTests(TestCase):
         self.billet_3 = EnFile.objects.create(numero_de_billet=b3, nom_file="Attraction 33", appele=False)
         
         # URL fictive pour le scan (à adapter selon ton urls.py, ici on utilise la PK de EnFile)
-        self.url_scan = reverse('scanner_billet', args=[self.billet_1.id])
+        self.url_scan = reverse('staff:scanner_billet', args=[self.billet_1.id])
+
+        # 3. Création et connexion d'un compte Staff pour les tests
+        self.staff_user = User.objects.create_superuser('staff_test', 'staff@test.com', 'password')
+        self.client.force_login(self.staff_user)
 
     @patch('staff.views.random.randint')
     def test_scan_billet_succes(self, mock_randint):
@@ -50,7 +56,7 @@ class AffluenceAttractionTests(TestCase):
             )
             
         # Tenter de scanner un 51ème billet (le self.billet_1)
-        url_scan_51 = reverse('scanner_billet', args=[self.billet_1.id])
+        url_scan_51 = reverse('staff:scanner_billet', args=[self.billet_1.id])
         response = self.client.post(url_scan_51)
         
         # Vérifier le rejet (HTTP 400 Bad Request)
