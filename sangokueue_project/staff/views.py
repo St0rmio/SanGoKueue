@@ -28,10 +28,15 @@ from home.views import (
     _formater_duree,
     _ordre_attente,
     _secondes_restantes_appel,
+    appeler_suivants,
     clear_visitors,
+    expirer_appels,
+    places_disponibles,
     envoyer_notifications_attente,
     remove_visitor,
     set_queue_pause,
+    valider_entree,
+    CAPACITE_MAX,
 )
 
 
@@ -93,23 +98,9 @@ def logout_view(request):
 
 
 def _queue_names():
-    from_entries = set(
-        EnFile.objects.values_list(
-            "nom_file",
-            flat=True,
-        )
-    )
-
-    from_states = set(
-        EtatFile.objects.values_list(
-            "nom_file",
-            flat=True,
-        )
-    )
-
-    return sorted(
-        from_entries | from_states
-    )
+    from_entries = set(EnFile.objects.values_list("nom_file", flat=True))
+    from_states = set(EtatFile.objects.values_list("nom_file", flat=True))
+    return sorted(from_entries | from_states | {QUEUE_NAME})
 
 
 def _counts():
@@ -238,6 +229,8 @@ def _queue_detail(name):
         "waiting": waiting,
         "called": called,
         "total": len(entries),
+        "places_disponibles": places_disponibles(),
+        "capacite_max": CAPACITE_MAX,
     }
 
 
@@ -255,6 +248,16 @@ def _back(queue):
     return redirect(url)
 
 
+def _sync_appels(queue=None):
+    """Expire les délais puis appelle selon les places libres."""
+    names = [queue] if queue else _queue_names()
+    for name in names:
+        if not name:
+            continue
+        expirer_appels(name)
+        appeler_suivants(name)
+
+
 @login_required
 def staff_view(request):
     names = _queue_names()
@@ -265,12 +268,9 @@ def staff_view(request):
     ).strip()
 
     if selected not in names:
-        selected = (
-            names[0]
-            if names
-            else ""
-        )
-
+        selected = names[0] if names else ""
+    if selected:
+        _sync_appels(selected)
     counts = _counts()
 
     template = (
@@ -336,11 +336,8 @@ def pause_view(request):
             f"La file « {queue} » est en pause.",
         )
     else:
-        messages.success(
-            request,
-            f"La file « {queue} » a repris.",
-        )
-
+        messages.success(request, f"La file « {queue} » a repris.")
+        _sync_appels(queue)
     return _back(queue)
 
 
@@ -418,25 +415,10 @@ def remove_view(request):
         )
 
         return _back(queue)
-
-    name = (
-        f"{entry.numero_de_billet.prenom} "
-        f"{entry.numero_de_billet.nom}"
-    )
-
-    remove_visitor(
-        visitor_id,
-        queue,
-    )
-
-    messages.success(
-        request,
-        (
-            f"{name} a été retiré "
-            f"de « {queue} »."
-        ),
-    )
-
+    name = f"{entry.numero_de_billet.prenom} {entry.numero_de_billet.nom}"
+    remove_visitor(visitor_id, queue)
+    _sync_appels(queue)
+    messages.success(request, f"{name} a été retiré de « {queue} ».")
     return _back(queue)
 
 
@@ -444,240 +426,55 @@ def remove_view(request):
 @require_POST
 def staff_scan_billet(request):
     try:
-        data = json.loads(
-            request.body
-        )
+        data = json.loads(request.body.decode() or "{}")
+        numero_billet = (data.get("numero_billet") or "").strip()
+    except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
+        return JsonResponse({
+            "status": "error",
+            "message": "Requête invalide.",
+        }, status=400)
 
-        numero_billet = data.get(
-            "numero_billet"
-        )
+    if not numero_billet:
+        return JsonResponse({
+            "status": "error",
+            "message": "Numéro de billet manquant.",
+        }, status=400)
 
-        # 1. Vérifier si le visiteur
-        # est déjà dans l'attraction
-        if VisiteurEnAttraction.objects.filter(
-            billet_id=numero_billet
-        ).exists():
-            return JsonResponse(
-                {
-                    "status": "error",
-                    "message": (
-                        "Ce visiteur est déjà "
-                        "dans l'attraction !"
-                    ),
-                }
-            )
+    try:
+        payload = json.loads(numero_billet)
+        if isinstance(payload, dict) and payload.get("id"):
+            numero_billet = str(payload["id"]).strip()
+    except (json.JSONDecodeError, TypeError):
+        pass
 
-        # 2. Récupérer le visiteur
-        # dans la file d'attente
-        en_file = EnFile.objects.get(
-            numero_de_billet_id=numero_billet
-        )
-
-        queue = en_file.nom_file
-
-        # 3. Faire entrer le visiteur
-        # dans l'attraction
-        duree_secondes = random.randint(
-            30,
-            90,
-        )
-
-        heure_sortie = (
-            timezone.now()
-            + timedelta(
-                seconds=duree_secondes
-            )
-        )
-
-        VisiteurEnAttraction.objects.create(
-            billet=en_file.numero_de_billet,
-            heure_sortie_prevue=heure_sortie,
-        )
-
-        # 4. Le retirer proprement
-        # de la file.
-        # remove_visitor recalcule aussi
-        # les notifications des personnes derrière.
-        remove_visitor(
-            numero_billet,
-            queue,
-        )
-
-        return JsonResponse(
-            {
-                "status": "success",
-                "message": (
-                    "Billet valide. "
-                    "Visiteur entré dans l'attraction."
-                ),
-            }
-        )
-
-    except EnFile.DoesNotExist:
-        return JsonResponse(
-            {
-                "status": "error",
-                "message": (
-                    "Billet invalide ou non présent "
-                    "dans la file d'attente."
-                ),
-            }
-        )
+    ok, message, status = valider_entree(numero_billet)
+    if ok:
+        _sync_appels()
+        return JsonResponse({"status": "success", "message": message})
+    return JsonResponse({"status": "error", "message": message}, status=status)
 
 
 @login_required
 def attraction_board(request):
     maintenant = timezone.now()
 
-    appeles = []
-
     with transaction.atomic():
-        # 1. Faire sortir automatiquement
-        # les visiteurs dont le temps est terminé
-        VisiteurEnAttraction.objects.filter(
-            heure_sortie_prevue__lte=maintenant
-        ).delete()
-
-        # 2. Compter les personnes
-        # réellement dans l'attraction
-        affluence = (
-            VisiteurEnAttraction.objects.count()
+        sortants = VisiteurEnAttraction.objects.filter(
+            heure_sortie_prevue__lte=maintenant,
         )
+        if sortants.exists():
+            sortants.delete()
 
-        # 3. Compter les visiteurs déjà appelés
-        # mais pas encore scannés
-        deja_appeles = (
-            EnFile.objects.filter(
-                nom_file=QUEUE_NAME,
-                appele=True,
-            ).count()
-        )
+    _sync_appels()
 
-        # Une personne déjà appelée
-        # réserve déjà une place
-        places_libres = max(
-            0,
-            (
-                CAPACITE_MAX
-                - affluence
-                - deja_appeles
-            ),
-        )
-
-        # 4. Vérifier si la file est en pause
-        etat = EtatFile.objects.filter(
-            nom_file=QUEUE_NAME
-        ).first()
-
-        file_en_pause = (
-            etat is not None
-            and etat.en_pause
-        )
-
-        # 5. Appeler autant de personnes
-        # qu'il y a de places disponibles
-        if (
-            places_libres > 0
-            and not file_en_pause
-        ):
-            entrees = list(
-                EnFile.objects
-                .select_for_update()
-                .filter(
-                    nom_file=QUEUE_NAME,
-                    appele=False,
-                )
-                .select_related(
-                    "numero_de_billet"
-                )
-            )
-
-            ordre = _ordre_attente(
-                entrees,
-                etat,
-                maintenant,
-            )
-
-            prochains = (
-                ordre[:places_libres]
-            )
-
-            for prochain in prochains:
-                prochain.appele = True
-
-                prochain.date_appel = (
-                    maintenant
-                )
-
-                prochain.save(
-                    update_fields=[
-                        "appele",
-                        "date_appel",
-                    ]
-                )
-
-                appeles.append(
-                    prochain.pk
-                )
-
-    # 6. Envoyer "C'est à vous !"
-    # aux personnes qui viennent d'être appelées
-    for entree_id in appeles:
-        prochain = (
-            EnFile.objects.filter(
-                pk=entree_id
-            ).first()
-        )
-
-        if prochain is None:
-            continue
-
-        abonnement_existe = (
-            PushSubscription.objects.filter(
-                numero_de_billet_id=(
-                    prochain.numero_de_billet_id
-                )
-            ).exists()
-        )
-
-        if (
-            abonnement_existe
-            and not prochain.notification_appel_envoyee
-        ):
-            send_push_notification(
-                prochain.numero_de_billet_id,
-                MESSAGE_APPEL,
-            )
-
-            prochain.notification_appel_envoyee = True
-
-            prochain.save(
-                update_fields=[
-                    "notification_appel_envoyee"
-                ]
-            )
-
-    # 7. Les personnes restantes
-    # ont peut-être avancé dans la file
-    if appeles:
-        envoyer_notifications_attente(
-            QUEUE_NAME
-        )
-
-    visiteurs = (
-        VisiteurEnAttraction.objects
-        .select_related("billet")
-        .order_by("heure_entree")
+    visiteurs = VisiteurEnAttraction.objects.select_related("billet").order_by(
+        "heure_entree"
     )
-
     compteur = visiteurs.count()
 
-    return render(
-        request,
-        "staff_en_attraction.html",
-        {
-            "visiteurs": visiteurs,
-            "compteur": compteur,
-            "capacite_max": CAPACITE_MAX,
-        },
-    )
+    return render(request, "staff_en_attraction.html", {
+        "visiteurs": visiteurs,
+        "compteur": compteur,
+        "capacite_max": CAPACITE_MAX,
+        "places_disponibles": places_disponibles(),
+    })

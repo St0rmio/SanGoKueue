@@ -1,5 +1,7 @@
 import json
-import queue
+import random
+import time
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
@@ -10,17 +12,23 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 
 from home import queues
-from home.models import Billet, EnFile, EtatFile, PushSubscription
+from home.models import Billet, EnFile, EtatFile, PushSubscription, VisiteurEnAttraction
 from home.notifications import send_notification
 from home.push_notifications import send_push_notification
 
 
 TEMPS_MOYEN_PAR_PERSONNE = 40
 ATTENTE_PRIORITE_SAIYAN = 25 * 60
-DELAI_PRESENTATION = 10 * 60
-
+DELAI_PRESENTATION = 5 * 60
+CAPACITE_MAX = 50
 QUEUE_NAME = "attraction"
-
+MESSAGE_APPEL = (
+    "Vous êtes appelés, veuillez vous rendre dans les "
+    f"{DELAI_PRESENTATION // 60} mins dans l'attraction."
+)
+MESSAGE_RENVOI = (
+    "Le délai est dépassé. Vous repartez en fin de file."
+)
 SEUIL_NOTIFICATION_10_MIN = 10 * 60
 SEUIL_NOTIFICATION_5_MIN = 5 * 60
 
@@ -76,7 +84,161 @@ def _join_queue(billet):
         )
 
 
-def _wait_context(billet, entree):
+def places_disponibles():
+    """Places libres hors visiteurs déjà présents ou déjà appelés."""
+    presents = VisiteurEnAttraction.objects.count()
+    appeles = EnFile.objects.filter(appele=True).count()
+    return max(0, CAPACITE_MAX - presents - appeles)
+
+
+def _renvoyer_en_fin_de_file(entree, maintenant):
+    ticket_id = entree.numero_de_billet_id
+    queue = entree.nom_file
+    priorite = entree.numero_de_billet.priorite
+    entree.appele = False
+    entree.deja_appele = True
+    entree.date_appel = None
+    entree.secondes_pause = 0
+    entree.secondes_pause_appel = 0
+    entree.notification_appel_envoyee = False
+    entree.date_entree = maintenant
+    entree.save(update_fields=[
+        "appele",
+        "deja_appele",
+        "date_appel",
+        "secondes_pause",
+        "secondes_pause_appel",
+        "notification_appel_envoyee",
+        "date_entree",
+    ])
+    queues.remove_from_queue(queue, ticket_id)
+    queues.append_to_queue(queue, ticket_id, priorite)
+    send_notification(ticket_id, MESSAGE_RENVOI)
+    return ticket_id
+
+
+def expirer_appels(queue=None):
+    """Renvoie en fin de file les appelés non validés dans les 5 min."""
+    maintenant = timezone.now()
+    filtres = {"appele": True}
+    if queue:
+        filtres["nom_file"] = queue
+        etat = EtatFile.objects.filter(nom_file=queue).first()
+        if etat is not None and etat.en_pause:
+            return set()
+
+    renvoyes = set()
+    with transaction.atomic():
+        appeles = list(
+            EnFile.objects.select_for_update()
+            .filter(**filtres)
+            .select_related("numero_de_billet")
+        )
+        for entree in appeles:
+            etat = EtatFile.objects.filter(nom_file=entree.nom_file).first()
+            if etat is not None and etat.en_pause:
+                continue
+            restant = _secondes_restantes_appel(entree, etat, maintenant)
+            if restant != 0:
+                continue
+            renvoyes.add(_renvoyer_en_fin_de_file(entree, maintenant))
+    return renvoyes
+
+
+def appeler_suivants(queue, nombre=None):
+    """Appelle autant de visiteurs que de places libres (ou `nombre`)."""
+    etat = EtatFile.objects.filter(nom_file=queue).first()
+    if etat is not None and etat.en_pause:
+        return []
+
+    expirer_appels(queue)
+    a_appeler = places_disponibles() if nombre is None else max(0, int(nombre))
+    if a_appeler <= 0:
+        return []
+
+    maintenant = timezone.now()
+    appeles = []
+    with transaction.atomic():
+        entrees = list(
+            EnFile.objects.select_for_update()
+            .filter(nom_file=queue, appele=False)
+            .select_related("numero_de_billet")
+        )
+        ordre = _ordre_attente(entrees, etat, maintenant)[:a_appeler]
+        for suivant in ordre:
+            suivant.appele = True
+            suivant.deja_appele = True
+            suivant.date_appel = maintenant
+            suivant.secondes_pause_appel = 0
+            suivant.save(update_fields=[
+                "appele",
+                "deja_appele",
+                "date_appel",
+                "secondes_pause_appel",
+            ])
+            appeles.append(suivant)
+
+    for suivant in appeles:
+        ticket_id = suivant.numero_de_billet_id
+        queues.remove_from_queue(queue, ticket_id)
+        queues.remember_called(queue, ticket_id)
+        send_notification(ticket_id, MESSAGE_APPEL)
+        if (
+            PushSubscription.objects.filter(numero_de_billet_id=ticket_id).exists()
+            and not suivant.notification_appel_envoyee
+        ):
+            send_push_notification(ticket_id, MESSAGE_APPEL)
+            suivant.notification_appel_envoyee = True
+            suivant.save(update_fields=["notification_appel_envoyee"])
+
+    if appeles:
+        envoyer_notifications_attente(queue)
+
+    return appeles
+
+
+def valider_entree(numero_billet):
+    """Staff valide un billet appelé : entre dans l'attraction."""
+    expirer_appels()
+    if VisiteurEnAttraction.objects.filter(billet_id=numero_billet).exists():
+        return False, "Ce visiteur est déjà dans l'attraction.", 400
+    if VisiteurEnAttraction.objects.count() >= CAPACITE_MAX:
+        return False, f"Attraction pleine ({CAPACITE_MAX}/{CAPACITE_MAX}).", 400
+
+    try:
+        billet = Billet.objects.get(pk=numero_billet)
+    except Billet.DoesNotExist:
+        return False, "Billet invalide.", 404
+
+    try:
+        entree = EnFile.objects.select_related("numero_de_billet").get(
+            numero_de_billet=billet,
+        )
+    except EnFile.DoesNotExist:
+        return False, "Billet invalide ou non présent dans la file d'attente.", 404
+
+    if not entree.appele:
+        return False, "Ce visiteur n'a pas encore été appelé.", 400
+
+    duree_secondes = random.randint(30, 90)
+    heure_sortie = timezone.now() + timedelta(seconds=duree_secondes)
+    VisiteurEnAttraction.objects.create(
+        billet=billet,
+        heure_sortie_prevue=heure_sortie,
+    )
+    queue = entree.nom_file
+    queues.remove_from_queue(queue, numero_billet)
+    entree.delete()
+    return True, "Billet valide. Visiteur entré dans l'attraction.", 200
+
+
+def _wait_context(billet, entree, renvoye=False):
+    if VisiteurEnAttraction.objects.filter(billet_id=billet.pk).exists():
+        return {
+            "billet": billet,
+            "dans_attraction": True,
+        }
+
     if entree is None:
         return {
             "billet": billet,
@@ -99,7 +261,9 @@ def _wait_context(billet, entree):
             "billet": billet,
             "position": None,
             "attente_minutes": (restant or 0) // 60,
+            "attente_restante": _formater_duree(restant or 0),
             "appele": True,
+            "message_appel": MESSAGE_APPEL,
         }
 
     devant = _personnes_devant(entree)
@@ -117,6 +281,7 @@ def _wait_context(billet, entree):
             attente_secondes
         ),
         "appele": False,
+        "renvoye": renvoye,
     }
 
 
@@ -161,22 +326,21 @@ def visitor(request, numero=None):
         )
 
         entree = None
+        renvoye = False
 
     elif refreshing:
+        renvoyes = expirer_appels(QUEUE_NAME)
         entree = EnFile.objects.filter(
             numero_de_billet=billet,
             nom_file=QUEUE_NAME,
         ).first()
+        renvoye = billet.pk in renvoyes
 
     else:
-        entree = _join_queue(
-            billet
-        )
+        entree = _join_queue(billet)
+        renvoye = False
 
-    context = _wait_context(
-        billet,
-        entree,
-    )
+    context = _wait_context(billet, entree, renvoye)
 
     if request.method == "POST":
         context["quitte"] = True
