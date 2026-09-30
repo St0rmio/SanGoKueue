@@ -1,3 +1,4 @@
+import json
 import random
 from datetime import timedelta
 
@@ -12,6 +13,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.db import transaction
 
 from home.models import Billet, EnFile, EtatFile, EnFile, VisiteurEnAttraction
 from home.views import (
@@ -184,33 +186,76 @@ def remove_view(request):
 
 @login_required
 @require_POST
-def scanner_billet(request, billet_id):
+def staff_scan_billet(request):
     if request.method == "POST":
-        capacite_max = 50
-        affluence_actuelle = VisiteurEnAttraction.objects.count()
-        
-        if affluence_actuelle >= capacite_max:
-            return JsonResponse({"status": "error", "message": "Attraction pleine (50/50)."}, status=400)
-            
         try:
-            billet = EnFile.objects.get(id=billet_id)
+            data = json.loads(request.body)
+            numero_billet = data.get('numero_billet')
             
-            # Calcul du temps aléatoire entre 30s et 1m30s
+            # 1. Vérifier s'il est déjà dans l'attraction
+            if VisiteurEnAttraction.objects.filter(billet_id=numero_billet).exists():
+                return JsonResponse({
+                    'status': 'error', 
+                    'message': "Ce visiteur est déjà dans l'attraction !"
+                })
+            
+            # 2. Récupérer le billet dans la file d'attente
+            en_file = EnFile.objects.get(numero_de_billet_id=numero_billet)
+            
+            # 3. Succès : Création dans l'attraction
             duree_secondes = random.randint(30, 90)
             heure_sortie = timezone.now() + timedelta(seconds=duree_secondes)
             
-            # Ajouter à l'attraction
             VisiteurEnAttraction.objects.create(
-                billet=billet, 
+                billet=en_file.numero_de_billet, # On passe l'objet Billet directement
                 heure_sortie_prevue=heure_sortie
             )
             
-            # Optionnel : changer le statut du billet (ex: statut="en_attraction")
+            # 4. On le supprime définitivement de la file
+            en_file.delete()
             
             return JsonResponse({
-                "status": "success", 
-                "message": f"Billet scanné. Affluence: {affluence_actuelle + 1}/50"
+                'status': 'success', 
+                'message': "Billet valide. Visiteur entré dans l'attraction."
             })
             
         except EnFile.DoesNotExist:
-            return JsonResponse({"status": "error", "message": "Billet invalide."}, status=404)
+            return JsonResponse({
+                'status': 'error', 
+                'message': "Billet invalide ou non présent dans la file d'attente."
+            })
+        
+
+def attraction_board(request):
+    maintenant = timezone.now()
+    capacite_max = 50
+
+    # On utilise une transaction pour éviter les conflits si 2 requêtes arrivent en même temps
+    with transaction.atomic():
+        # A. Trouver et supprimer les visiteurs dont le temps est écoulé
+        sortants = VisiteurEnAttraction.objects.filter(heure_sortie_prevue__lte=maintenant)
+        nb_sortants = sortants.count()
+        
+        if nb_sortants > 0:
+            sortants.delete() # Libère la place
+            
+            # B. Appeler les prochains pour combler les places libérées
+            affluence_actuelle = VisiteurEnAttraction.objects.count()
+            places_libres = capacite_max - affluence_actuelle
+            
+            if places_libres > 0:
+                # Appeler les visiteurs de la file (qui ne sont pas encore appelés)
+                prochains = EnFile.objects.filter(appele=False).order_by('date_entree')[:places_libres]
+                for prochain in prochains:
+                    prochain.appele = True
+                    prochain.save()
+                    # fonction d'envoi de WebSocket/Notification à appeller ici
+
+    visiteurs = VisiteurEnAttraction.objects.select_related('billet').order_by('heure_entree')
+    compteur = visiteurs.count()
+    
+    return render(request, 'staff_en_attraction.html', {
+        'visiteurs': visiteurs,
+        'compteur': compteur,
+        'capacite_max': capacite_max
+    })

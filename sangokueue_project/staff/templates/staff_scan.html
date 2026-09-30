@@ -1,0 +1,72 @@
+<div class="card mt-4">
+    <div class="card-header bg-dark text-white">
+        <h3 class="mb-0">Contrôle d'accès</h3>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <!-- Zone Scanner QR -->
+            <div class="col-md-6 border-end">
+                <h5>Scanner le QR Code</h5>
+                <div id="reader" style="width: 100%;"></div>
+            </div>
+            
+            <!-- Zone Saisie Manuelle -->
+            <div class="col-md-6">
+                <h5>Saisie manuelle</h5>
+                <div class="input-group mb-3 mt-3">
+                    <input type="text" id="ticket_manuel" class="form-control" placeholder="Numéro du billet">
+                    <button class="btn btn-primary" onclick="traiterBilletManuel()">Valider</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Zone d'affichage des messages -->
+        <div id="scan-alert" class="alert mt-3" style="display:none;" role="alert"></div>
+    </div>
+</div>
+
+<!-- Librairie pour le scanner (si tu ne l'as pas déjà importée globalement) -->
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<script>
+    // Récupération du token CSRF de Django
+    const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}';
+
+    function afficherMessage(status, message) {
+        const alertBox = document.getElementById('scan-alert');
+        alertBox.style.display = 'block';
+        alertBox.className = `alert mt-3 alert-${status === 'success' ? 'success' : 'danger'}`;
+        alertBox.innerText = message;
+    }
+
+    function envoyerBillet(numero) {
+        fetch("{% url 'staff:scan_billet' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify({ numero_billet: numero })
+        })
+        .then(response => response.json())
+        .then(data => afficherMessage(data.status, data.message))
+        .catch(error => afficherMessage('error', 'Erreur de connexion au serveur.'));
+    }
+
+    // Gestion de la saisie manuelle
+    function traiterBilletManuel() {
+        const input = document.getElementById('ticket_manuel').value.trim();
+        if(input) {
+            envoyerBillet(input);
+            document.getElementById('ticket_manuel').value = '';
+        }
+    }
+
+    // Initialisation du scanner QR
+    function onScanSuccess(decodedText, decodedResult) {
+        envoyerBillet(decodedText);
+    }
+    
+    let html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
+    html5QrcodeScanner.render(onScanSuccess);
+</script>
