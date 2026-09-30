@@ -5,32 +5,84 @@
 {% block main %}
 
 <div class="w-100" style="max-width: 450px;">
-            
-  <h2 class="h4 text-center fw-bold mb-3 text-dark">Scannez votre billet</h2>
-  <div id="qr-reader" class="ratio ratio-1x1 camera-box mb-2 shadow-sm overflow-hidden">
-    <div id="qr-loading" class="d-flex flex-column align-items-center justify-content-center h-100 w-100">
-      <i class="bi bi-camera-video" style="font-size: 3rem;"></i>
-      <p class="mt-3 mb-0 fw-bold text-center">Activation de la caméra...</p>
-    </div>
-  </div>
+<h2 class="h4 text-center fw-bold mb-3 text-dark">Scannez votre billet</h2>
+<div id="qr-reader" class="ratio ratio-1x1 camera-box mb-2 shadow-sm overflow-hidden">
+<div id="qr-loading" class="d-flex flex-column align-items-center justify-content-center h-100 w-100">
+<i class="bi bi-camera-video" style="font-size: 3rem;"></i>
+<p class="mt-3 mb-0 fw-bold text-center">Activation de la caméra...</p>
+</div>
+</div>
 
-  <div class="d-flex align-items-center my-4 text-muted">
-    <hr class="flex-grow-1 border-secondary opacity-50">
-    <span class="mx-3 fw-bold small text-uppercase">ou</span>
-    <hr class="flex-grow-1 border-secondary opacity-50">
-  </div>
+<div class="d-flex align-items-center my-4 text-muted">
+<hr class="flex-grow-1 border-secondary opacity-50">
+<span class="mx-3 fw-bold small text-uppercase">ou</span>
+<hr class="flex-grow-1 border-secondary opacity-50">
+</div>
 
-  <h2 class="h4 text-center fw-bold mb-3 text-dark">Entrez votre numéro de billet</h2>
-    <form action="#" method="POST" class="px-2">
-      {% csrf_token %} 
-      <div class="mb-3">
-        <input type="text" class="form-control form-control-lg text-center shadow-sm" placeholder="Ex: Billet-12345" required>
-      </div>
-      <button type="submit" class="btn btn-dbz btn-lg w-100 shadow-sm rounded-pill">
+<h2 class="h4 text-center fw-bold mb-3 text-dark">Entrez votre numéro de billet</h2>
+<form id="formulaire-billet" action="{% url 'home:visitor' %}" method="get" class="px-2">
+<div class="mb-3">
+<input type="text" id="numero-billet" name="billet" class="form-control form-control-lg text-center shadow-sm" placeholder="Ex: Billet-12345" required>
+</div>
+<button type="submit" class="btn btn-dbz btn-lg w-100 shadow-sm rounded-pill">
         Entrer dans la file
-      </button>
-    </form>
+</button>
+</form>
 
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const html5QrCode = new Html5Qrcode("qr-reader");
+    const champBillet = document.getElementById("numero-billet");
+
+    const formulaire = document.getElementById("formulaire-billet");
+    let dejaLu = false;   // la bibliothèque appelle la fonction plusieurs fois par seconde
+
+    // Le QR code contient un JSON (voir qr_code_generation.py) : on n'en garde que le numéro, le champ "id"
+    function extraireNumero(texte) {
+        try {
+            const donnees = JSON.parse(texte);
+            if (donnees && donnees.id) return String(donnees.id).trim();
+        } catch (e) { /* pas du JSON : on garde le texte tel quel */ }
+        return texte.trim();
+    }
+
+    // Appelée quand un QR code est lu : la caméra s'arrête, le numéro va dans le champ,
+    // puis on envoie le formulaire, comme si le visiteur l'avait saisi à la main
+    const onScanSuccess = (decodedText) => {
+        if (dejaLu) return;
+        dejaLu = true;
+        const numero = extraireNumero(decodedText);
+        html5QrCode.stop()
+            .catch((err) => console.error("Erreur lors de l'arrêt de la caméra.", err))
+            .then(() => {
+                champBillet.value = numero;
+                formulaire.requestSubmit();
+            });
+    };
+
+    const config = {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        aspectRatio: 1.0
+    };
+
+    html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess)
+        .catch((err) => {
+            const loadingDiv = document.getElementById("qr-loading");
+            if (loadingDiv) {
+                loadingDiv.innerHTML = `
+                    <i class="bi bi-camera-video-off text-danger" style="font-size: 3rem;"></i>
+                    <p class="mt-3 mb-0 fw-bold text-danger text-center">Caméra inaccessible<br><small>Vérifiez les permissions de votre navigateur</small></p>
+                `;
+            }
+            console.error("Erreur de démarrage de la caméra :", err);
+        });
+});
+</script>
 {% endblock %}
