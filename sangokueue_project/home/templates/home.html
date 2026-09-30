@@ -21,10 +21,10 @@
   </div>
 
   <h2 class="h4 text-center fw-bold mb-3 text-dark">Entrez votre numéro de billet</h2>
-    <form action="#" method="POST" class="px-2">
-      {% csrf_token %} 
+    <form action="{% url 'visitor' %}" method="get" class="px-2">
       <div class="mb-3">
-        <input type="text" class="form-control form-control-lg text-center shadow-sm" placeholder="Ex: Billet-12345" required>
+        <label for="billet" class="visually-hidden">Numéro de billet</label>
+        <input id="billet" name="billet" type="text" class="form-control form-control-lg text-center shadow-sm" placeholder="Ex: H1" required>
       </div>
       <button type="submit" class="btn btn-dbz btn-lg w-100 shadow-sm rounded-pill">
         Entrer dans la file

@@ -80,7 +80,10 @@ def visitor(request, numero=None):
         raise Http404("Billet introuvable.")
 
     refreshing = bool(request.headers.get("HX-Request"))
-    if refreshing:
+    if request.method == "POST":
+        remove_visitor(billet.pk, QUEUE_NAME)
+        entree = None
+    elif refreshing:
         entree = EnFile.objects.filter(
             numero_de_billet=billet,
             nom_file=QUEUE_NAME,
@@ -89,6 +92,8 @@ def visitor(request, numero=None):
         entree = _join_queue(billet)
 
     context = _wait_context(billet, entree)
+    if request.method == "POST":
+        context["quitte"] = True
     template = "visitor_position.html" if refreshing else "interface_visiteur.html"
     return render(request, template, context)
 

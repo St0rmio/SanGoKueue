@@ -1,8 +1,10 @@
 <div id="visitor-position"
      class="text-center mt-5"
+     {% if not quitte %}
      hx-get="{% url 'visitor_billet' billet.pk %}"
      hx-trigger="every 2s"
-     hx-swap="outerHTML">
+     hx-swap="outerHTML"
+     {% endif %}>
   {% if expire %}
     <h1 class="dbz-title">Billet expiré</h1>
   {% elif absent %}
@@ -14,5 +16,25 @@
     <h1 class="dbz-title">File d'attente</h1>
     <p class="fs-4 mb-1">Position <strong>{{ position }}</strong></p>
     <p class="fs-5">Attente : environ <strong>{{ attente_minutes }} min</strong></p>
+  {% endif %}
+  {% if quitte %}
+    <p class="mt-3 mb-0">Retour à l'accueil...</p>
+    <script>
+      setTimeout(function () {
+        window.location.assign("{% url 'home:home' %}");
+      }, 3000);
+    </script>
+  {% endif %}
+  {% if not expire and not absent %}
+    <form method="post"
+          class="mt-4"
+          action="{% url 'visitor_billet' billet.pk %}"
+          hx-post="{% url 'visitor_billet' billet.pk %}"
+          hx-target="#visitor-position"
+          hx-swap="outerHTML"
+          onsubmit="return confirm('Quitter la file ?');">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-danger">Quitter la file</button>
+    </form>
   {% endif %}
 </div>
