@@ -17,6 +17,7 @@ from home.tests_all.tests_queues import _FakeRedis
 class TestJeuDeBillets(TestCase):
     def test_les_numeros_sont_des_uuid(self):
         numeros = [numero for numero, *_reste in BILLETS]
+        self.assertGreaterEqual(len(numeros), 60)
         self.assertEqual(len(numeros), len(set(numeros)))
         for numero, _prenom, _nom, _priorite in BILLETS:
             identifiant = uuid.UUID(numero)
