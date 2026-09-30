@@ -13,6 +13,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.db import transaction
 
 from home.models import Billet, EnFile, EtatFile, EnFile, VisiteurEnAttraction
 from home.views import (
@@ -226,11 +227,35 @@ def staff_scan_billet(request):
         
 
 def attraction_board(request):
+    maintenant = timezone.now()
+    capacite_max = 50
+
+    # On utilise une transaction pour éviter les conflits si 2 requêtes arrivent en même temps
+    with transaction.atomic():
+        # A. Trouver et supprimer les visiteurs dont le temps est écoulé
+        sortants = VisiteurEnAttraction.objects.filter(heure_sortie_prevue__lte=maintenant)
+        nb_sortants = sortants.count()
+        
+        if nb_sortants > 0:
+            sortants.delete() # Libère la place
+            
+            # B. Appeler les prochains pour combler les places libérées
+            affluence_actuelle = VisiteurEnAttraction.objects.count()
+            places_libres = capacite_max - affluence_actuelle
+            
+            if places_libres > 0:
+                # Appeler les visiteurs de la file (qui ne sont pas encore appelés)
+                prochains = EnFile.objects.filter(appele=False).order_by('date_entree')[:places_libres]
+                for prochain in prochains:
+                    prochain.appele = True
+                    prochain.save()
+                    # fonction d'envoi de WebSocket/Notification à appeller ici
+
     visiteurs = VisiteurEnAttraction.objects.select_related('billet').order_by('heure_entree')
     compteur = visiteurs.count()
     
     return render(request, 'staff_en_attraction.html', {
         'visiteurs': visiteurs,
         'compteur': compteur,
-        'capacite_max': 50
+        'capacite_max': capacite_max
     })
