@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}Mon espace – SanGoKueue{% endblock %}
 
@@ -29,6 +30,10 @@
 </div>
 {% else %}
 <div class="container py-4">
+
+  {% if not expire and not absent and not appele %}
+  <img src="{% static 'home/images/waiting_piccolo.png' %}" alt="Piccolo médite en attendant" class="waiting-piccolo">
+  {% endif %}
 
   <div class="d-flex justify-content-center">
     <div class="dbz-card statut-{{ billet.priorite }} d-flex align-items-center gap-3 p-3">

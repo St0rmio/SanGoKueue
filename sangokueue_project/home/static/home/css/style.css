@@ -2,6 +2,15 @@
     background-color: #f19820 !important;
 }
 
+body.home-shenron {
+    background-color: #f6f1df !important;
+    background-image: url("../images/shenron_background.png");
+    background-repeat: no-repeat;
+    background-position: center 25%;
+    background-size: cover;
+    background-attachment: fixed;
+}
+
 .dbz-font {
     font-family: 'Bangers', cursive;
     color: #ed0805;
@@ -30,4 +39,11 @@
 .btn-dbz:hover {
     background-color: #E67300;
     color: white;
+}
+
+.waiting-piccolo {
+    display: block;
+    width: min(150px, 46vw);
+    height: auto;
+    margin: 0 auto 1rem;
 }
