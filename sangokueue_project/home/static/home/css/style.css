@@ -1,25 +1,44 @@
+/* =========================
+   GENERAL
+   ========================= */
+
+   * {
+    box-sizing: border-box;
+}
+
+
+/* =========================
+   COULEUR PRINCIPALE
+   ========================= */
+
 .bg-skyblue {
     background-color: #f19820 !important;
 }
 
+
+/* =========================
+   POLICE DBZ
+   ========================= */
+
 .dbz-font {
     font-family: 'Bangers', cursive;
     color: #ed0805;
-    text-shadow: 2px 2px 0 #FFD700, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+
+    text-shadow:
+        2px 2px 0 #FFD700,
+        -1px -1px 0 #000,
+        1px -1px 0 #000,
+        -1px 1px 0 #000,
+        1px 1px 0 #000;
+
     letter-spacing: 2px;
     font-size: 2.2rem;
 }
 
-.camera-box {
-    background-color: #1a1a1a;
-    border: 3px dashed #87CEEB;
-    border-radius: 15px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    color: #6c757d;
-}
+
+/* =========================
+   BOUTON DBZ
+   ========================= */
 
 .btn-dbz {
     background-color: #FF7F00;
@@ -27,7 +46,339 @@
     color: white;
     font-weight: bold;
 }
+
 .btn-dbz:hover {
     background-color: #E67300;
     color: white;
+}
+
+
+/* =========================
+   CONTENEUR PRINCIPAL
+   ========================= */
+
+.billet-container {
+    width: 100%;
+    max-width: 440px;
+
+    margin: 0 auto;
+
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+
+/* =========================
+   CADRE DRAGON BALL
+   ========================= */
+
+.qr-scanner-container {
+    position: relative;
+
+    width: 100%;
+    aspect-ratio: 1 / 1;
+
+    margin: 0 auto;
+
+    border-radius: 25px;
+
+    background-image:
+        url("/static/home/images/qr-background.webp");
+
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+
+    box-shadow:
+        0 4px 15px rgba(0, 0, 0, 0.25);
+
+    overflow: hidden;
+}
+
+
+/* =========================
+   ZONE CAMERA
+   ========================= */
+
+   #qr-reader {
+    position: absolute !important;
+
+    top: 50% !important;
+    left: 50% !important;
+
+    transform: translate(-50%, -50%) !important;
+
+    width: 75% !important;
+    height: 75% !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    background: transparent !important;
+    border: none !important;
+
+    border-radius: 10px;
+
+    overflow: hidden !important;
+
+    box-sizing: border-box !important;
+}
+
+
+/* =========================
+   ZONE DE SCAN HTML5-QRCODE
+   ========================= */
+
+#qr-reader__scan_region {
+    position: absolute !important;
+
+    top: 0 !important;
+    left: 0 !important;
+
+    width: 100% !important;
+    height: 100% !important;
+
+    min-width: 100% !important;
+    min-height: 100% !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    background: transparent !important;
+
+    overflow: hidden !important;
+}
+
+
+/* =========================
+   VIDEO CAMERA
+   ========================= */
+
+#qr-reader video {
+    position: absolute !important;
+
+    top: 0 !important;
+    left: 0 !important;
+
+    width: 100% !important;
+    height: 100% !important;
+
+    min-width: 100% !important;
+    min-height: 100% !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    display: block !important;
+
+    object-fit: cover !important;
+
+    background: transparent !important;
+}
+
+
+/* =========================
+   SUPPRESSION DU CADRE BLANC
+   ========================= */
+
+#qr-shaded-region {
+    display: none !important;
+}
+
+
+/* =========================
+   CADRE DE DETECTION QR
+   ========================= */
+
+#qr-shaded-region {
+    pointer-events: none !important;
+}
+
+
+/* =========================
+   CANVAS
+   ========================= */
+
+#qr-reader canvas {
+    max-width: 100% !important;
+}
+
+
+/* =========================
+   MESSAGE SOUS LE SCANNER
+   ========================= */
+
+#qr-statut {
+    margin-top: 8px;
+}
+
+
+/* =========================
+   IMAGES DECORATIVES
+   ========================= */
+
+.visiteur-gif-left,
+.visiteur-gif-right {
+    position: fixed;
+
+    top: 50%;
+
+    transform:
+        translateY(-50%);
+
+    width: 500px;
+    height: 700px;
+
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+
+    pointer-events: none;
+
+    z-index: 0;
+}
+
+
+/* =========================
+   IMAGE GAUCHE
+   ========================= */
+
+.visiteur-gif-left {
+    left: -40px;
+
+    background-image:
+        url("/static/home/images/salle_esprit_du_temps-a.jpg");
+}
+
+
+/* =========================
+   IMAGE DROITE
+   ========================= */
+
+.visiteur-gif-right {
+    right: -40px;
+
+    background-image:
+        url("/static/home/images/goku_attente-a.jpg");
+}
+
+
+/* =========================
+   CONTENU AU-DESSUS DES IMAGES
+   ========================= */
+
+.container {
+    position: relative;
+    z-index: 1;
+}
+
+
+/* =========================
+   ECRANS MOYENS
+   ========================= */
+
+@media (max-width: 1400px) {
+
+    .visiteur-gif-left,
+    .visiteur-gif-right {
+        width: 400px;
+        height: 550px;
+    }
+}
+
+
+/* =========================
+   TABLETTES / PETITS ECRANS
+   ========================= */
+
+@media (max-width: 1100px) {
+
+    .visiteur-gif-left,
+    .visiteur-gif-right {
+        display: none;
+    }
+}
+
+
+/* =========================
+   TELEPHONES
+   ========================= */
+
+@media (max-width: 576px) {
+
+    .billet-container {
+        width: 100%;
+        max-width: 440px;
+
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+
+
+    .qr-scanner-container {
+        width: 100%;
+
+        aspect-ratio: 1 / 1;
+
+        border-radius: 20px;
+    }
+
+
+    #qr-reader {
+        width: 75% !important;
+        height: auto !important;
+
+        aspect-ratio: 1 / 1 !important;
+
+        top: 50% !important;
+        left: 50% !important;
+
+        transform:
+            translate(-50%, -50%) !important;
+
+        border-radius: 8px;
+    }
+
+
+    .billet-container h2 {
+        font-size: 1.15rem;
+    }
+
+
+    .billet-container .form-control {
+        font-size: 1rem;
+    }
+
+
+    .billet-container .btn {
+        font-size: 1rem;
+    }
+}
+
+
+/* =========================
+   TRES PETITS TELEPHONES
+   ========================= */
+
+@media (max-width: 360px) {
+
+    .billet-container {
+        padding-left: 6px;
+        padding-right: 6px;
+    }
+
+
+    .qr-scanner-container {
+        border-radius: 16px;
+    }
+
+
+    #qr-reader {
+        width: 76% !important;
+        height: auto !important;
+
+        aspect-ratio: 1 / 1 !important;
+
+        border-radius: 7px;
+    }
 }
