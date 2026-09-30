@@ -15,6 +15,10 @@ os.environ.setdefault(
 
 django_asgi_app = get_asgi_application()
 
+from sangokueue_app.demarrage import preparer_production
+
+preparer_production()
+
 from home.routing import websocket_urlpatterns
 
 application = ProtocolTypeRouter({

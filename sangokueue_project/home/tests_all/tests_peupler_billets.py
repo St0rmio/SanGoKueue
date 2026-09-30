@@ -1,9 +1,13 @@
+import os
 import uuid
 from datetime import timedelta
 from io import StringIO
+from unittest.mock import patch
 
+from django.contrib.auth import authenticate
+from django.contrib.auth.models import User
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from home import queues
@@ -15,6 +19,7 @@ from home.tests_all.tests_queues import _FakeRedis
 class TestJeuDeBillets(TestCase):
     def test_les_numeros_sont_des_uuid(self):
         numeros = [numero for numero, *_reste in BILLETS]
+        self.assertGreaterEqual(len(numeros), 60)
         self.assertEqual(len(numeros), len(set(numeros)))
         for numero, _prenom, _nom, _priorite in BILLETS:
             identifiant = uuid.UUID(numero)
@@ -76,3 +81,75 @@ class TestJeuDeBillets(TestCase):
         )
         self.assertEqual(self.client.get(f"/visiteur/{numero_vegeta}/").status_code, 200)
         self.assertContains(self.client.get(f"/visiteur/{numero_vegeta}/"), "Vegeta Prince")
+
+    def test_peupler_cree_le_superuser_admin(self):
+        call_command("peupler_billets", stdout=StringIO())
+
+        user = User.objects.get(username="admin")
+        self.assertTrue(user.is_staff)
+        self.assertTrue(user.is_superuser)
+        self.assertTrue(user.is_active)
+        mot_de_passe = os.environ.get("ADMIN_PASSWORD", "admin")
+        self.assertIsNotNone(authenticate(username="admin", password=mot_de_passe))
+
+        call_command("peupler_billets", stdout=StringIO())
+        self.assertEqual(User.objects.filter(username="admin").count(), 1)
+
+
+class TestDemarrageProduction(SimpleTestCase):
+    @patch("sangokueue_app.demarrage.call_command")
+    def test_hors_production_ne_touche_pas_la_base(self, commande):
+        from sangokueue_app.demarrage import preparer_production
+
+        with patch.dict(os.environ, {"ENVIRONMENT": "development"}):
+            preparer_production()
+
+        commande.assert_not_called()
+
+    @patch("sangokueue_app.demarrage.call_command")
+    def test_en_production_migre_puis_peuple(self, commande):
+        from sangokueue_app.demarrage import preparer_production
+
+        with patch.dict(os.environ, {"ENVIRONMENT": "production"}):
+            preparer_production()
+
+        commande.assert_any_call("migrate", interactive=False, verbosity=1)
+        commande.assert_any_call("peupler_billets")
+
+
+class TestReessaiConnexion(SimpleTestCase):
+    def test_une_coupure_est_retentee(self):
+        from sangokueue_app.pg.base import avec_reessai
+
+        class OperationalError(Exception):
+            pass
+
+        essais = {"n": 0}
+
+        def action():
+            essais["n"] += 1
+            if essais["n"] == 1:
+                raise OperationalError("server closed the connection unexpectedly")
+            return "ok"
+
+        with patch("sangokueue_app.pg.base.time.sleep"):
+            self.assertEqual(avec_reessai(action), "ok")
+        self.assertEqual(essais["n"], 2)
+
+    def test_une_autre_erreur_n_est_pas_retentee(self):
+        from sangokueue_app.pg.base import avec_reessai
+
+        def action():
+            raise ValueError("autre")
+
+        with self.assertRaises(ValueError):
+            avec_reessai(action)
+
+    def test_la_connexion_delegue_au_parent(self):
+        from django.db.backends.postgresql.base import DatabaseWrapper as PostgresWrapper
+
+        from sangokueue_app.pg.base import DatabaseWrapper
+
+        wrapper = DatabaseWrapper.__new__(DatabaseWrapper)
+        with patch.object(PostgresWrapper, "get_new_connection", return_value="ouverte"):
+            self.assertEqual(wrapper.get_new_connection({"host": "db"}), "ouverte")
