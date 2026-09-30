@@ -16,3 +16,4 @@ channels==4.3.2
 channels-redis==4.3.0
 msgpack==1.2.3
 daphne==4.2.3
+pywebpush==2.5.0

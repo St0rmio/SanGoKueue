@@ -6,5 +6,16 @@ app_name = 'home'
 
 urlpatterns = [
     path("", views.home, name="home"),
-    path("visiteur/", views.visitor, name="visitor"),   # ← la ligne ajoutée
+
+    path(
+        "push/subscribe",
+        views.subscribe_push,
+        name="subscribe_push",
+    ),
+
+    path(
+        "visiteur/",
+        views.visitor,
+        name="visitor",
+    ),
 ]
