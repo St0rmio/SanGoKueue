@@ -144,3 +144,12 @@ class TestReessaiConnexion(SimpleTestCase):
 
         with self.assertRaises(ValueError):
             avec_reessai(action)
+
+    def test_la_connexion_delegue_au_parent(self):
+        from django.db.backends.postgresql.base import DatabaseWrapper as PostgresWrapper
+
+        from sangokueue_app.pg.base import DatabaseWrapper
+
+        wrapper = DatabaseWrapper.__new__(DatabaseWrapper)
+        with patch.object(PostgresWrapper, "get_new_connection", return_value="ouverte"):
+            self.assertEqual(wrapper.get_new_connection({"host": "db"}), "ouverte")

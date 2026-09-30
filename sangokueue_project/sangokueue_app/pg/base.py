@@ -20,4 +20,5 @@ def avec_reessai(action, tentatives=TENTATIVES):
 
 class DatabaseWrapper(PostgresWrapper):
     def get_new_connection(self, conn_params):
-        return avec_reessai(lambda: super().get_new_connection(conn_params))
+        ouvrir = super().get_new_connection
+        return avec_reessai(lambda: ouvrir(conn_params))
