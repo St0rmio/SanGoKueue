@@ -6,12 +6,11 @@ from django.http import Http404, HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
-from django.views.decorators.http import require_POST
-from django.http import HttpResponse
 from django.shortcuts import render
 from home import queues
-from home.models import Billet, EnFile, EtatFile
+from home.models import Billet, EnFile, EtatFile, PushSubscription
 from home.notifications import send_notification
+from django.conf import settings
 TEMPS_MOYEN_PAR_PERSONNE = 120
 ATTENTE_PRIORITE_SAIYAN = 25 * 60
 DELAI_PRESENTATION = 10 * 60
@@ -20,6 +19,14 @@ QUEUE_NAME = "attraction"
 
 def home(request):
     return render(request, 'home.html')
+
+def service_worker(request):
+    return render(
+        request,
+        "service-worker.js",
+        content_type="application/javascript",
+    )
+
 
 
 def _join_queue(billet):
@@ -71,6 +78,7 @@ def _wait_context(billet, entree):
 def visitor(request, numero=None):
     """Affiche l'espace visiteur et l'inscrit dans la file."""
     numero = (numero or request.GET.get("billet") or "").strip()
+
     if not numero:
         return render(request, "interface_visiteur.html", {"billet": None})
 
@@ -80,21 +88,30 @@ def visitor(request, numero=None):
         raise Http404("Billet introuvable.")
 
     refreshing = bool(request.headers.get("HX-Request"))
+
     if request.method == "POST":
         remove_visitor(billet.pk, QUEUE_NAME)
         entree = None
+
     elif refreshing:
         entree = EnFile.objects.filter(
             numero_de_billet=billet,
             nom_file=QUEUE_NAME,
         ).first()
+
     else:
         entree = _join_queue(billet)
 
     context = _wait_context(billet, entree)
+
     if request.method == "POST":
         context["quitte"] = True
+
+    if not refreshing:
+        context["vapid_public_key"] = settings.VAPID_PUBLIC_KEY
+
     template = "visitor_position.html" if refreshing else "interface_visiteur.html"
+
     return render(request, template, context)
 
 def _instant(etat, maintenant):
@@ -201,6 +218,34 @@ def _message_notification(position, secondes):
 def _erreur(message, status):
     return JsonResponse({"error": message}, status=status)
 
+@require_POST
+def subscribe_push(request):
+    try:
+        data = json.loads(request.body.decode() or "{}")
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return JsonResponse({"success": False}, status=400)
+
+    try:
+        billet = Billet.objects.get(
+            pk=data["visitorId"]
+        )
+
+        subscription = data["subscription"]
+        keys = subscription["keys"]
+
+        PushSubscription.objects.update_or_create(
+            endpoint=subscription["endpoint"],
+            defaults={
+                "numero_de_billet": billet,
+                "p256dh": keys["p256dh"],
+                "auth": keys["auth"],
+            },
+        )
+
+    except (KeyError, Billet.DoesNotExist):
+        return JsonResponse({"success": False}, status=400)
+
+    return JsonResponse({"success": True})
 
 @csrf_exempt
 @require_POST

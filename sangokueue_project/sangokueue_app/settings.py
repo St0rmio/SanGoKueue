@@ -255,3 +255,11 @@ MAILERS = {
 # Redirection when not logged with login_required on view
 
 LOGIN_URL = 'staff:login'
+# Notifications push
+VAPID_PRIVATE_KEY = BASE_DIR / "private_key.pem"
+
+VAPID_PUBLIC_KEY = "BEDGxBQUKEQ-3W-I2Mry4ZjSvjkthKtnPeUULPMIBIf8CyZTiuR0tw4FSrVVd-Hlkuq_RQnB01QZjFryCzpjnjM"
+
+VAPID_CLAIMS = {
+    "sub": "mailto:adelemmop@gmail.com"
+}
