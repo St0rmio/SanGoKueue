@@ -1,10 +1,14 @@
+import os
 from datetime import timedelta
 
+from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from home.donnees_billets import BILLETS, VALIDITE_JOURS
 from home.models import Billet
+
+ADMIN_USERNAME = "admin"
 
 
 class Command(BaseCommand):
@@ -47,8 +51,23 @@ class Command(BaseCommand):
                 mis_a_jour += 1
             self.stdout.write(f"{numero}  {prenom} {nom}  valide jusqu'au {jour}")
 
+        self._assurer_admin()
         self.stdout.write(
             self.style.SUCCESS(
                 f"{crees} billet(s) créé(s), {mis_a_jour} mis à jour."
             )
         )
+
+    def _assurer_admin(self):
+        password = os.environ.get("ADMIN_PASSWORD", "admin")
+        user, created = User.objects.get_or_create(
+            username=ADMIN_USERNAME,
+            defaults={"is_staff": True, "is_superuser": True},
+        )
+        user.is_staff = True
+        user.is_superuser = True
+        user.is_active = True
+        user.set_password(password)
+        user.save()
+        etat = "créé" if created else "à jour"
+        self.stdout.write(self.style.SUCCESS(f"Compte {ADMIN_USERNAME} {etat}."))
