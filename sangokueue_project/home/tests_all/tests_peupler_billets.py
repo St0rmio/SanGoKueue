@@ -115,3 +115,32 @@ class TestDemarrageProduction(SimpleTestCase):
 
         commande.assert_any_call("migrate", interactive=False, verbosity=1)
         commande.assert_any_call("peupler_billets")
+
+
+class TestReessaiConnexion(SimpleTestCase):
+    def test_une_coupure_est_retentee(self):
+        from sangokueue_app.pg.base import avec_reessai
+
+        class OperationalError(Exception):
+            pass
+
+        essais = {"n": 0}
+
+        def action():
+            essais["n"] += 1
+            if essais["n"] == 1:
+                raise OperationalError("server closed the connection unexpectedly")
+            return "ok"
+
+        with patch("sangokueue_app.pg.base.time.sleep"):
+            self.assertEqual(avec_reessai(action), "ok")
+        self.assertEqual(essais["n"], 2)
+
+    def test_une_autre_erreur_n_est_pas_retentee(self):
+        from sangokueue_app.pg.base import avec_reessai
+
+        def action():
+            raise ValueError("autre")
+
+        with self.assertRaises(ValueError):
+            avec_reessai(action)
