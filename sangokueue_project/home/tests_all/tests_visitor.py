@@ -14,7 +14,13 @@ class TestVisitorPage(TestCase):
     def tearDown(self):
         queues._client = None
 
-    def _ticket(self, number, first="Son", last="Goku", priority=Billet.Priorite.HUMAN):
+    def _ticket(
+        self,
+        number,
+        first="Son",
+        last="Goku",
+        priority=Billet.Priorite.HUMAN,
+    ):
         return Billet.objects.create(
             numero_de_billet=number,
             date=self.today,
@@ -24,7 +30,11 @@ class TestVisitorPage(TestCase):
         )
 
     def test_joins_the_queue_and_shows_the_wait(self):
-        self._ticket("H1", first="Krilin", last="Brief")
+        self._ticket(
+            "H1",
+            first="Krilin",
+            last="Brief",
+        )
 
         response = self.client.get("/visiteur/H1/")
 
@@ -35,98 +45,228 @@ class TestVisitorPage(TestCase):
         self.assertContains(response, "0 min")
         self.assertContains(response, 'hx-trigger="every 2s"')
         self.assertNotContains(response, "Choisis ton attraction")
+
         self.assertTrue(
-            EnFile.objects.filter(numero_de_billet_id="H1", nom_file="attraction").exists()
+            EnFile.objects.filter(
+                numero_de_billet_id="H1",
+                nom_file="attraction",
+            ).exists()
         )
 
     def test_second_visitor_waits_behind_the_first(self):
         self._ticket("H1")
-        self._ticket("H2", first="Son", last="Gohan")
+
+        self._ticket(
+            "H2",
+            first="Son",
+            last="Gohan",
+        )
+
         self.client.get("/visiteur/H1/")
 
         response = self.client.get("/visiteur/H2/")
 
         self.assertContains(response, "Position")
         self.assertContains(response, ">2<")
-        self.assertContains(response, "2 min")
+        self.assertContains(
+            response,
+            "moins d&#x27;une minute",
+        )
 
     def test_opening_the_page_twice_does_not_join_again(self):
         self._ticket("H1")
+
         self.client.get("/visiteur/H1/")
         self.client.get("/visiteur/H1/")
 
         self.assertEqual(
-            EnFile.objects.filter(numero_de_billet_id="H1", nom_file="attraction").count(),
+            EnFile.objects.filter(
+                numero_de_billet_id="H1",
+                nom_file="attraction",
+            ).count(),
             1,
         )
 
     def test_position_updates_when_someone_passes(self):
-        self._ticket("H1", first="Krilin", last="Brief")
+        self._ticket(
+            "H1",
+            first="Krilin",
+            last="Brief",
+        )
+
         self.client.get("/visiteur/H1/")
-        self._ticket("SS1", first="Vegeta", last="Prince", priority=Billet.Priorite.SUPER_SAIYAN)
+
+        self._ticket(
+            "SS1",
+            first="Vegeta",
+            last="Prince",
+            priority=Billet.Priorite.SUPER_SAIYAN,
+        )
+
         self.client.get("/visiteur/SS1/")
 
-        response = self.client.get("/visiteur/H1/", HTTP_HX_REQUEST="true")
+        response = self.client.get(
+            "/visiteur/H1/",
+            HTTP_HX_REQUEST="true",
+        )
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, ">2<")
-        self.assertContains(response, "2 min")
+        self.assertContains(
+            response,
+            "moins d&#x27;une minute",
+        )
         self.assertNotContains(response, "<html")
 
     def test_refresh_does_not_rejoin_after_removal(self):
         self._ticket("H1")
+
         self.client.get("/visiteur/H1/")
+
         EnFile.objects.all().delete()
 
-        response = self.client.get("/visiteur/H1/", HTTP_HX_REQUEST="true")
+        response = self.client.get(
+            "/visiteur/H1/",
+            HTTP_HX_REQUEST="true",
+        )
 
-        self.assertContains(response, "Tu n'es plus dans la file")
-        self.assertContains(response, 'data-redirect="/home/"')
-        self.assertNotContains(response, 'hx-trigger="every 2s"')
-        self.assertFalse(EnFile.objects.filter(numero_de_billet_id="H1").exists())
+        self.assertContains(
+            response,
+            "Tu n'es plus dans la file",
+        )
+
+        self.assertContains(
+            response,
+            'data-redirect="/home/"',
+        )
+
+        self.assertNotContains(
+            response,
+            'hx-trigger="every 2s"',
+        )
+
+        self.assertFalse(
+            EnFile.objects.filter(
+                numero_de_billet_id="H1"
+            ).exists()
+        )
 
     def test_unknown_ticket_is_not_found(self):
-        response = self.client.get("/visiteur/inconnu/")
-        self.assertEqual(response.status_code, 404)
+        response = self.client.get(
+            "/visiteur/inconnu/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
 
     def test_entry_asks_for_a_ticket(self):
-        response = self.client.get("/visiteur/")
-        self.assertContains(response, "Numéro de billet")
+        response = self.client.get(
+            "/visiteur/"
+        )
+
+        self.assertContains(
+            response,
+            "Numéro de billet",
+        )
 
     def test_home_form_opens_the_visitor_page(self):
         self._ticket("H1")
 
-        page = self.client.get("/home/")
-        self.assertContains(page, 'action="/visiteur/"')
-        self.assertContains(page, 'name="billet"')
+        page = self.client.get(
+            "/home/"
+        )
 
-        response = self.client.get("/visiteur/", {"billet": "H1"})
+        self.assertContains(
+            page,
+            'action="/visiteur/"',
+        )
 
-        self.assertContains(response, "Son Goku")
-        self.assertContains(response, "File d'attente")
+        self.assertContains(
+            page,
+            'name="billet"',
+        )
+
+        response = self.client.get(
+            "/visiteur/",
+            {
+                "billet": "H1"
+            },
+        )
+
+        self.assertContains(
+            response,
+            "Son Goku",
+        )
+
+        self.assertContains(
+            response,
+            "File d'attente",
+        )
+
         self.assertTrue(
-            EnFile.objects.filter(numero_de_billet_id="H1", nom_file="attraction").exists()
+            EnFile.objects.filter(
+                numero_de_billet_id="H1",
+                nom_file="attraction",
+            ).exists()
         )
 
     def test_page_offers_to_leave_the_queue(self):
         self._ticket("H1")
 
-        response = self.client.get("/visiteur/H1/")
+        response = self.client.get(
+            "/visiteur/H1/"
+        )
 
-        self.assertContains(response, "Quitter la file")
-        self.assertContains(response, "planifierRetourAccueil")
+        self.assertContains(
+            response,
+            "Quitter la file",
+        )
+
+        self.assertContains(
+            response,
+            "planifierRetourAccueil",
+        )
 
     def test_leaving_removes_the_visitor(self):
         self._ticket("H1")
+
         self.client.get("/visiteur/H1/")
 
-        response = self.client.post("/visiteur/H1/", HTTP_HX_REQUEST="true")
+        response = self.client.post(
+            "/visiteur/H1/",
+            HTTP_HX_REQUEST="true",
+        )
 
-        self.assertContains(response, "Tu n'es plus dans la file")
-        self.assertContains(response, 'data-redirect="/home/"')
-        self.assertContains(response, "Retour à l'accueil...")
-        self.assertNotContains(response, 'hx-trigger="every 2s"')
-        self.assertNotContains(response, "Quitter la file")
+        self.assertContains(
+            response,
+            "Tu n'es plus dans la file",
+        )
+
+        self.assertContains(
+            response,
+            'data-redirect="/home/"',
+        )
+
+        self.assertContains(
+            response,
+            "Retour à l'accueil...",
+        )
+
+        self.assertNotContains(
+            response,
+            'hx-trigger="every 2s"',
+        )
+
+        self.assertNotContains(
+            response,
+            "Quitter la file",
+        )
+
         self.assertFalse(
-            EnFile.objects.filter(numero_de_billet_id="H1", nom_file="attraction").exists()
+            EnFile.objects.filter(
+                numero_de_billet_id="H1",
+                nom_file="attraction",
+            ).exists()
         )

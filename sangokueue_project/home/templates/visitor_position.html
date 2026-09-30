@@ -17,7 +17,7 @@
   {% else %}
     <h1 class="dbz-title">File d'attente</h1>
     <p class="fs-4 mb-1">Position <strong>{{ position }}</strong></p>
-    <p class="fs-5">Attente : environ <strong>{{ attente_minutes }} min</strong></p>
+    <p class="fs-5">Attente : environ <strong>{{ attente_texte }}</strong></p>
   {% endif %}
   {% if quitte or absent and not expire %}
     <p class="mt-3 mb-0">Retour à l'accueil...</p>
