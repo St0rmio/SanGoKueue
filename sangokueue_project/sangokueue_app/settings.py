@@ -120,21 +120,32 @@ ASGI_APPLICATION = 'sangokueue_app.asgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-def postgres_from_url(url):
-    parsed = urlparse(url)
-    host = parsed.hostname or ""
+def postgres_config(host, name, user, password, port):
     config = {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": unquote(parsed.path.lstrip("/")),
-        "USER": unquote(parsed.username or ""),
-        "PASSWORD": unquote(parsed.password or ""),
+        "ENGINE": "sangokueue_app.pg",
+        "NAME": name,
+        "USER": user,
+        "PASSWORD": password,
         "HOST": host,
-        "PORT": str(parsed.port or 5432),
-        "CONN_MAX_AGE": 600,
+        "PORT": str(port or 5432),
+        "CONN_MAX_AGE": 0,
+        "CONN_HEALTH_CHECKS": True,
+        "OPTIONS": {"connect_timeout": 10},
     }
     if host.endswith(".render.com"):
-        config["OPTIONS"] = {"sslmode": "require"}
+        config["OPTIONS"]["sslmode"] = "require"
     return config
+
+
+def postgres_from_url(url):
+    parsed = urlparse(url)
+    return postgres_config(
+        parsed.hostname or "",
+        unquote(parsed.path.lstrip("/")),
+        unquote(parsed.username or ""),
+        unquote(parsed.password or ""),
+        parsed.port or 5432,
+    )
 
 
 if IS_PRODUCTION:
@@ -142,19 +153,15 @@ if IS_PRODUCTION:
     if database_url:
         DATABASES = {"default": postgres_from_url(database_url)}
     else:
-        host = os.environ.get("DB_HOST", "localhost")
-        config = {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.environ.get("DB_NAME", "sangokueue"),
-            "USER": os.environ.get("DB_USER", "sangokueue_user"),
-            "PASSWORD": os.environ["DB_PASSWORD"],
-            "HOST": host,
-            "PORT": os.environ.get("DB_PORT", "5432"),
-            "CONN_MAX_AGE": 600,
+        DATABASES = {
+            "default": postgres_config(
+                os.environ.get("DB_HOST", "localhost"),
+                os.environ.get("DB_NAME", "sangokueue"),
+                os.environ.get("DB_USER", "sangokueue_user"),
+                os.environ["DB_PASSWORD"],
+                os.environ.get("DB_PORT", "5432"),
+            )
         }
-        if host.endswith(".render.com"):
-            config["OPTIONS"] = {"sslmode": "require"}
-        DATABASES = {"default": config}
 else:
     DATABASES = {
         "default": {

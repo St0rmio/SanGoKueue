@@ -9,7 +9,7 @@ class Billet(models.Model):
         SAIYAN = 1, "Saiyan"
         SUPER_SAIYAN = 2, "Super Saiyan"
 
-    numero_de_billet = models.CharField(max_length=32, primary_key=True)
+    numero_de_billet = models.CharField(max_length=36, primary_key=True)
     date = models.DateField()
     prenom = models.CharField(max_length=30)
     nom = models.CharField(max_length=30)

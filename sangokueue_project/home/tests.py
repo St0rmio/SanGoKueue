@@ -7,6 +7,37 @@ from datetime import timedelta, date
 from unittest.mock import patch
 
 from home.models import Billet, EnFile, VisiteurEnAttraction
+from home.tests_all.tests_append_to_queue import TestAppendToQueue
+from home.tests_all.tests_clear_queue import TestClearQueue
+from home.tests_all.tests_leave_queue import TestLeaveQueue
+from home.tests_all.tests_notifications import NotificationWebSocketTests
+from home.tests_all.tests_pause_queue import TestPauseQueue, TestPauseQueueHorloge
+from home.tests_all.tests_peupler_billets import (
+    TestDemarrageProduction,
+    TestJeuDeBillets,
+    TestReessaiConnexion,
+)
+from home.tests_all.tests_qr_code import TestBillets
+from home.tests_all.tests_queues import TestQueues
+from home.tests_all.tests_scenario_file import TestScenarioFile
+from home.tests_all.tests_visitor import TestVisitorPage
+
+__all__ = [
+    "AffluenceAttractionTests",
+    "NotificationWebSocketTests",
+    "TestAppendToQueue",
+    "TestBillets",
+    "TestClearQueue",
+    "TestDemarrageProduction",
+    "TestJeuDeBillets",
+    "TestLeaveQueue",
+    "TestPauseQueue",
+    "TestPauseQueueHorloge",
+    "TestQueues",
+    "TestReessaiConnexion",
+    "TestScenarioFile",
+    "TestVisitorPage",
+]
 
 class AffluenceAttractionTests(TestCase):
     def setUp(self):

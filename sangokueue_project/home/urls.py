@@ -12,4 +12,10 @@ urlpatterns = [
         views.subscribe_push,
         name="subscribe_push",
     ),
+
+    path(
+        "visiteur/",
+        views.visitor,
+        name="visitor",
+    ),
 ]
