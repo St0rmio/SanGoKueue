@@ -64,6 +64,14 @@
     overflow: hidden;
 }
 
+.qr-scanner-container #qr-reader video {
+    object-fit: cover !important;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 10px; 
+}
+
+
 /* =========================
    IMAGES DECORATIVES
    ========================= */
