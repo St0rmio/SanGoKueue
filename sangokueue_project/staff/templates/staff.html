@@ -27,4 +27,6 @@
 
 {% include "staff_scan.html" %}
 
+<div hx-get="{% url 'staff:attraction_board' %}" hx-trigger="load, every 2s"></div>
+
 {% endblock %}

@@ -223,3 +223,14 @@ def staff_scan_billet(request):
                 'status': 'error', 
                 'message': "Billet invalide ou non présent dans la file d'attente."
             })
+        
+
+def attraction_board(request):
+    visiteurs = VisiteurEnAttraction.objects.select_related('billet').order_by('heure_entree')
+    compteur = visiteurs.count()
+    
+    return render(request, 'staff_en_attraction.html', {
+        'visiteurs': visiteurs,
+        'compteur': compteur,
+        'capacite_max': 50
+    })
