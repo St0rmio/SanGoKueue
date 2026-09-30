@@ -31,3 +31,93 @@
     background-color: #E67300;
     color: white;
 }
+
+/* =========================
+   QR CODE SCANNER
+   ========================= */
+
+   .qr-scanner-container {
+    width: 100%;
+    max-width: 440px;
+
+    padding: 55px;
+
+    margin: 0 auto;
+
+    border-radius: 25px;
+
+    background-image: url("/static/home/images/qr-background.webp");
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+}
+
+.qr-scanner-container #qr-reader {
+    width: 320px;
+    height: 320px;
+
+    margin: 0 auto;
+
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* =========================
+   IMAGES DECORATIVES
+   ========================= */
+
+   .visiteur-gif-left,
+   .visiteur-gif-right {
+       position: fixed;
+   
+       top: 50%;
+       transform: translateY(-50%);
+   
+       width: 500px;
+       height: 700px;
+   
+       background-size: contain;
+       background-position: center;
+       background-repeat: no-repeat;
+   
+       pointer-events: none;
+       z-index: 0;
+   }
+   
+   /* Image de gauche */
+   .visiteur-gif-left {
+       left: -40px;
+       background-image: url("/static/home/images/salle_esprit_du_temps-a.jpg");
+   }
+   
+   /* Image de droite */
+   .visiteur-gif-right {
+       right: -40px;
+       background-image: url("/static/home/images/goku_attente-a.jpg");
+   }
+   
+   
+   /* Le contenu reste au-dessus des images */
+   .container {
+       position: relative;
+       z-index: 1;
+   }
+   
+   
+   /* Écrans plus petits */
+   @media (max-width: 1400px) {
+       .visiteur-gif-left,
+       .visiteur-gif-right {
+           width: 400px;
+           height: 550px;
+       }
+   }
+   
+   @media (max-width: 1100px) {
+       .visiteur-gif-left,
+       .visiteur-gif-right {
+           display: none;
+       }
+   }
