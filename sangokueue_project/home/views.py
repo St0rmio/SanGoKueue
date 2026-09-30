@@ -11,6 +11,7 @@ from home import queues
 from home.models import Billet, EnFile, EtatFile, PushSubscription
 from home.notifications import send_notification
 from django.conf import settings
+from home.push_notifications import send_push_notification
 
 
 TEMPS_MOYEN_PAR_PERSONNE = 40
@@ -404,7 +405,45 @@ def _notification_attente_a_envoyer(entree):
         }
 
     return None
+def envoyer_notifications_attente(queue):
+    entrees = EnFile.objects.filter(
+        nom_file=queue,
+        appele=False,
+    ).select_related("numero_de_billet")
 
+    notifications_envoyees = []
+
+    for entree in entrees:
+        notification = _notification_attente_a_envoyer(entree)
+
+        if notification is None:
+            continue
+
+        # On n'enregistre pas la notification comme envoyée
+        # si le visiteur n'a pas activé les notifications push.
+        abonnement_existe = PushSubscription.objects.filter(
+            numero_de_billet_id=entree.numero_de_billet_id
+        ).exists()
+
+        if not abonnement_existe:
+            continue
+
+        send_push_notification(
+            entree.numero_de_billet_id,
+            notification["message"],
+        )
+
+        champ = notification["champ"]
+
+        setattr(entree, champ, True)
+        entree.save(update_fields=[champ])
+
+        notifications_envoyees.append({
+            "visitorId": entree.numero_de_billet_id,
+            "message": notification["message"],
+        })
+
+    return notifications_envoyees
 def _message_notification(position, secondes):
     return (
         "Vous avez rejoint la file. "
