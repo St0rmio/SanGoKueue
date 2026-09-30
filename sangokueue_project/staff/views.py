@@ -1,5 +1,9 @@
+import random
+from datetime import timedelta
+
 from urllib.parse import urlencode
 
+from django.http import JsonResponse
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -9,7 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from home.models import Billet, EnFile, EtatFile
+from home.models import Billet, EnFile, EtatFile, EnFile, VisiteurEnAttraction
 from home.views import (
     TEMPS_MOYEN_PAR_PERSONNE,
     _formater_duree,
@@ -176,3 +180,37 @@ def remove_view(request):
     remove_visitor(visitor_id, queue)
     messages.success(request, f"{name} a été retiré de « {queue} ».")
     return _back(queue)
+
+
+@login_required
+@require_POST
+def scanner_billet(request, billet_id):
+    if request.method == "POST":
+        capacite_max = 50
+        affluence_actuelle = VisiteurEnAttraction.objects.count()
+        
+        if affluence_actuelle >= capacite_max:
+            return JsonResponse({"status": "error", "message": "Attraction pleine (50/50)."}, status=400)
+            
+        try:
+            billet = EnFile.objects.get(id=billet_id)
+            
+            # Calcul du temps aléatoire entre 30s et 1m30s
+            duree_secondes = random.randint(30, 90)
+            heure_sortie = timezone.now() + timedelta(seconds=duree_secondes)
+            
+            # Ajouter à l'attraction
+            VisiteurEnAttraction.objects.create(
+                billet=billet, 
+                heure_sortie_prevue=heure_sortie
+            )
+            
+            # Optionnel : changer le statut du billet (ex: statut="en_attraction")
+            
+            return JsonResponse({
+                "status": "success", 
+                "message": f"Billet scanné. Affluence: {affluence_actuelle + 1}/50"
+            })
+            
+        except EnFile.DoesNotExist:
+            return JsonResponse({"status": "error", "message": "Billet invalide."}, status=404)

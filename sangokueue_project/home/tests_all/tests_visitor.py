@@ -90,3 +90,40 @@ class TestVisitorPage(TestCase):
     def test_entry_asks_for_a_ticket(self):
         response = self.client.get("/visiteur/")
         self.assertContains(response, "Numéro de billet")
+
+    def test_home_form_opens_the_visitor_page(self):
+        self._ticket("H1")
+
+        page = self.client.get("/home/")
+        self.assertContains(page, 'action="/visiteur/"')
+        self.assertContains(page, 'name="billet"')
+
+        response = self.client.get("/visiteur/", {"billet": "H1"})
+
+        self.assertContains(response, "Son Goku")
+        self.assertContains(response, "File d'attente")
+        self.assertTrue(
+            EnFile.objects.filter(numero_de_billet_id="H1", nom_file="attraction").exists()
+        )
+
+    def test_page_offers_to_leave_the_queue(self):
+        self._ticket("H1")
+
+        response = self.client.get("/visiteur/H1/")
+
+        self.assertContains(response, "Quitter la file")
+
+    def test_leaving_removes_the_visitor(self):
+        self._ticket("H1")
+        self.client.get("/visiteur/H1/")
+
+        response = self.client.post("/visiteur/H1/", HTTP_HX_REQUEST="true")
+
+        self.assertContains(response, "Tu n'es plus dans la file")
+        self.assertContains(response, 'window.location.assign("/home/")')
+        self.assertContains(response, "3000")
+        self.assertNotContains(response, 'hx-trigger="every 2s"')
+        self.assertNotContains(response, "Quitter la file")
+        self.assertFalse(
+            EnFile.objects.filter(numero_de_billet_id="H1", nom_file="attraction").exists()
+        )

@@ -5,6 +5,7 @@
 __pycache__
 db.sqlite3
 media
+staticfiles/
 
 # Backup files # 
 *.bak 
@@ -141,3 +142,5 @@ GitHub.sublime-settings
 
 # Mac
 .DS_Store
+
+*.zip
