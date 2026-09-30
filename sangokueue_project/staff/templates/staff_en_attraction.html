@@ -1,0 +1,33 @@
+<!-- staff/templates/staff_en_attraction.html -->
+<div class="card mt-4 shadow-sm border-info">
+    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">Dans l'attraction</h4>
+        <span class="badge bg-light text-dark fs-6">{{ compteur }} / {{ capacite_max }}</span>
+    </div>
+    <div class="card-body p-0 table-responsive" style="max-height: 400px; overflow-y: auto;">
+        <table class="table table-striped table-hover mb-0 text-center">
+            <thead class="table-info sticky-top">
+                <tr>
+                    <th>Nom</th>
+                    <th>N° billet</th>
+                    <th>Heure d'entrée</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for visiteur in visiteurs %}
+                <tr>
+                    <td class="fw-bold">{{ visiteur.billet.prenom }} {{ visiteur.billet.nom }}</td>
+                    <td>{{ visiteur.billet.numero_de_billet }}</td>
+                    <td>{{ visiteur.heure_entree|date:"H:i:s" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="3" class="text-center text-muted py-4">
+                        <em>L'attraction est actuellement vide.</em>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

@@ -50,18 +50,12 @@ class EtatFile(models.Model):
 
 
 class VisiteurEnAttraction(models.Model):
-    billet = models.OneToOneField(
-        'EnFile',
-        on_delete=models.CASCADE
-    )
+    billet = models.OneToOneField('Billet', on_delete=models.CASCADE) 
     heure_entree = models.DateTimeField(default=timezone.now)
     heure_sortie_prevue = models.DateTimeField()
 
     def __str__(self):
-        return (
-            f"Billet {self.billet.numero_de_billet_id} - "
-            f"Sortie à {self.heure_sortie_prevue.strftime('%H:%M:%S')}"
-        )
+        return f"Billet {self.billet.numero_de_billet} - Sortie à {self.heure_sortie_prevue.strftime('%H:%M:%S')}"
 
 
 class PushSubscription(models.Model):

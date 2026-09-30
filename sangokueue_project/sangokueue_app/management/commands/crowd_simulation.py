@@ -37,24 +37,21 @@ class Command(BaseCommand):
         )
 
         while True:
-            maintenant = timezone.now()
-            appeles = []
-
             with transaction.atomic():
-                # 1. Retirer les visiteurs dont le tour est terminé
-                sortants = VisiteurEnAttraction.objects.filter(
-                    heure_sortie_prevue__lte=maintenant
-                )
-
+                maintenant = timezone.now()
+            
+                # 1. Faire sortir ceux dont le temps est écoulé
+                sortants = VisiteurEnAttraction.objects.filter(heure_sortie_prevue__lte=maintenant)
+                            
+                # Affichage optionnel dans le terminal
                 for visiteur in sortants:
-                    self.stdout.write(
-                        f"Sortie : le billet "
-                        f"{visiteur.billet.id} a terminé."
-                    )
-
+                    self.stdout.write(f"Sortie : Billet {visiteur.billet.numero_de_billet}")
+                            
+                # On les supprime du manège (les places redeviennent libres)
                 sortants.delete()
-
-                # 2. Nombre de personnes actuellement dans l'attraction
+            
+                # 2. Appeler les prochains de la file
+                # Calculer les places libres et passer "appele = True" aux X suivants
                 affluence = VisiteurEnAttraction.objects.count()
 
                 # Personnes déjà appelées mais pas encore retirées de la file
