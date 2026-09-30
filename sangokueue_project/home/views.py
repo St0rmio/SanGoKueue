@@ -491,7 +491,14 @@ def subscribe_push(request):
                 "auth": keys["auth"],
             },
         )
+        entree = EnFile.objects.filter(
+            numero_de_billet=billet,
+            nom_file=QUEUE_NAME,
+        ).first()
 
+        if entree is not None:
+            envoyer_notifications_attente(QUEUE_NAME)
+            
     except (
         KeyError,
         Billet.DoesNotExist,
@@ -638,7 +645,7 @@ def remove_visitor(visitor_id, queue):
         queue,
         visitor_id,
     )
-
+    envoyer_notifications_attente(queue)
     return {
         "visitorId": visitor_id,
         "queue": queue,
