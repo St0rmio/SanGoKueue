@@ -1,3 +1,4 @@
+import json
 import random
 from datetime import timedelta
 
@@ -184,33 +185,39 @@ def remove_view(request):
 
 @login_required
 @require_POST
-def scanner_billet(request, billet_id):
+def staff_scan_billet(request):
     if request.method == "POST":
-        capacite_max = 50
-        affluence_actuelle = VisiteurEnAttraction.objects.count()
-        
-        if affluence_actuelle >= capacite_max:
-            return JsonResponse({"status": "error", "message": "Attraction pleine (50/50)."}, status=400)
-            
         try:
-            billet = EnFile.objects.get(id=billet_id)
+            data = json.loads(request.body)
+            numero_billet = data.get('numero_billet')
             
-            # Calcul du temps aléatoire entre 30s et 1m30s
+            # Vérification 1 : Le billet est-il enregistré dans la file courante ?
+            en_file = EnFile.objects.get(numero_de_billet_id=numero_billet)
+            
+            # Vérification 2 : Éviter le double scan
+            if hasattr(en_file, 'visiteurenattraction'):
+                return JsonResponse({
+                    'status': 'error', 
+                    'message': "Ce visiteur est déjà dans l'attraction !"
+                })
+            
+            # Succès : Création du visiteur en attraction (sans supprimer EnFile pour garder la liaison OneToOne)
             duree_secondes = random.randint(30, 90)
             heure_sortie = timezone.now() + timedelta(seconds=duree_secondes)
             
-            # Ajouter à l'attraction
             VisiteurEnAttraction.objects.create(
-                billet=billet, 
+                billet=en_file,
                 heure_sortie_prevue=heure_sortie
             )
             
-            # Optionnel : changer le statut du billet (ex: statut="en_attraction")
-            
             return JsonResponse({
-                "status": "success", 
-                "message": f"Billet scanné. Affluence: {affluence_actuelle + 1}/50"
+                'status': 'success', 
+                'message': "Billet valide. Visiteur entré dans l'attraction."
             })
             
         except EnFile.DoesNotExist:
-            return JsonResponse({"status": "error", "message": "Billet invalide."}, status=404)
+            # Rejet : Le billet n'est pas dans EnFile
+            return JsonResponse({
+                'status': 'error', 
+                'message': "Billet invalide ou visiteur non présent dans la file d'attente."
+            })
