@@ -4,6 +4,8 @@ from datetime import timedelta
 from io import StringIO
 from unittest.mock import patch
 
+from django.contrib.auth import authenticate
+from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
@@ -79,6 +81,19 @@ class TestJeuDeBillets(TestCase):
         )
         self.assertEqual(self.client.get(f"/visiteur/{numero_vegeta}/").status_code, 200)
         self.assertContains(self.client.get(f"/visiteur/{numero_vegeta}/"), "Vegeta Prince")
+
+    def test_peupler_cree_le_superuser_admin(self):
+        call_command("peupler_billets", stdout=StringIO())
+
+        user = User.objects.get(username="admin")
+        self.assertTrue(user.is_staff)
+        self.assertTrue(user.is_superuser)
+        self.assertTrue(user.is_active)
+        mot_de_passe = os.environ.get("ADMIN_PASSWORD", "admin")
+        self.assertIsNotNone(authenticate(username="admin", password=mot_de_passe))
+
+        call_command("peupler_billets", stdout=StringIO())
+        self.assertEqual(User.objects.filter(username="admin").count(), 1)
 
 
 class TestDemarrageProduction(SimpleTestCase):
