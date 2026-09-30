@@ -1,9 +1,11 @@
+import os
 import uuid
 from datetime import timedelta
 from io import StringIO
+from unittest.mock import patch
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from home import queues
@@ -76,3 +78,24 @@ class TestJeuDeBillets(TestCase):
         )
         self.assertEqual(self.client.get(f"/visiteur/{numero_vegeta}/").status_code, 200)
         self.assertContains(self.client.get(f"/visiteur/{numero_vegeta}/"), "Vegeta Prince")
+
+
+class TestDemarrageProduction(SimpleTestCase):
+    @patch("sangokueue_app.demarrage.call_command")
+    def test_hors_production_ne_touche_pas_la_base(self, commande):
+        from sangokueue_app.demarrage import preparer_production
+
+        with patch.dict(os.environ, {"ENVIRONMENT": "development"}):
+            preparer_production()
+
+        commande.assert_not_called()
+
+    @patch("sangokueue_app.demarrage.call_command")
+    def test_en_production_migre_puis_peuple(self, commande):
+        from sangokueue_app.demarrage import preparer_production
+
+        with patch.dict(os.environ, {"ENVIRONMENT": "production"}):
+            preparer_production()
+
+        commande.assert_any_call("migrate", interactive=False, verbosity=1)
+        commande.assert_any_call("peupler_billets")

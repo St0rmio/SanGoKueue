@@ -12,7 +12,7 @@ from home.tests_all.tests_clear_queue import TestClearQueue
 from home.tests_all.tests_leave_queue import TestLeaveQueue
 from home.tests_all.tests_notifications import NotificationWebSocketTests
 from home.tests_all.tests_pause_queue import TestPauseQueue, TestPauseQueueHorloge
-from home.tests_all.tests_peupler_billets import TestJeuDeBillets
+from home.tests_all.tests_peupler_billets import TestDemarrageProduction, TestJeuDeBillets
 from home.tests_all.tests_qr_code import TestBillets
 from home.tests_all.tests_queues import TestQueues
 from home.tests_all.tests_scenario_file import TestScenarioFile
@@ -24,6 +24,7 @@ __all__ = [
     "TestAppendToQueue",
     "TestBillets",
     "TestClearQueue",
+    "TestDemarrageProduction",
     "TestJeuDeBillets",
     "TestLeaveQueue",
     "TestPauseQueue",
