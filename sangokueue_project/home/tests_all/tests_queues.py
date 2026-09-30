@@ -182,7 +182,7 @@ class TestQueues(SimpleTestCase):
         self.assertFalse(queues.is_paused(self.file))
         self.assertEqual(queues.pop_from_queue(self.file), "H1")
 
-    def test_validation_dans_les_10_min(self):
+    def test_validation_dans_les_5_min(self):
         self._entrer("H1", Billet.Priorite.HUMAN)
         self.assertEqual(queues.pop_from_queue(self.file), "H1")
 
@@ -190,7 +190,7 @@ class TestQueues(SimpleTestCase):
 
         self.assertTrue(queues.validate_entry(self.file, "H1"))
 
-    def test_expire_apres_10_min_sans_validation(self):
+    def test_expire_apres_5_min_sans_validation(self):
         self._entrer("H1", Billet.Priorite.HUMAN)
         self.assertEqual(queues.pop_from_queue(self.file), "H1")
 
