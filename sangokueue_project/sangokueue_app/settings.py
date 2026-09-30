@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 import os
 import sys
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 from dotenv import load_dotenv
 
@@ -21,16 +22,53 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 
+def env_flag(name, default):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def split_csv(value):
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+ENV = os.environ.get("ENVIRONMENT", "development")
+IS_PRODUCTION = ENV == "production"
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-*cc*c@gr05l7q5kg5%jq@-#wdjo*97hzr5d^nr++^inw8#-ed+'
+if IS_PRODUCTION:
+    SECRET_KEY = os.environ["SECRET_KEY"]
+    DEBUG = env_flag("DEBUG", False)
+else:
+    SECRET_KEY = os.environ.get(
+        "SECRET_KEY",
+        "django-insecure-*cc*c@gr05l7q5kg5%jq@-#wdjo*97hzr5d^nr++^inw8#-ed+",
+    )
+    DEBUG = env_flag("DEBUG", True)
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+ALLOWED_HOSTS = split_csv(os.environ.get("ALLOWED_HOSTS", ""))
+render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "").strip()
+if render_host and render_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(render_host)
+if not IS_PRODUCTION:
+    for host in ("localhost", "127.0.0.1"):
+        if host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(host)
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+CSRF_TRUSTED_ORIGINS = split_csv(os.environ.get("CSRF_TRUSTED_ORIGINS", ""))
+render_origin = os.environ.get("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
+if render_origin and render_origin not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append(render_origin)
+
+if IS_PRODUCTION:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 
 # Application definition
@@ -49,6 +87,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -81,19 +120,41 @@ ASGI_APPLICATION = 'sangokueue_app.asgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-ENV = os.environ.get("ENVIRONMENT", "development")
-
-if ENV == "production":
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": "sangokueue",
-            "USER": "sangokueue_user",
-            "PASSWORD": os.environ["DB_PASSWORD"],
-            "HOST": "localhost",
-            "PORT": "5432",
-        }
+def postgres_from_url(url):
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+    config = {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": unquote(parsed.path.lstrip("/")),
+        "USER": unquote(parsed.username or ""),
+        "PASSWORD": unquote(parsed.password or ""),
+        "HOST": host,
+        "PORT": str(parsed.port or 5432),
+        "CONN_MAX_AGE": 600,
     }
+    if host.endswith(".render.com"):
+        config["OPTIONS"] = {"sslmode": "require"}
+    return config
+
+
+if IS_PRODUCTION:
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        DATABASES = {"default": postgres_from_url(database_url)}
+    else:
+        host = os.environ.get("DB_HOST", "localhost")
+        config = {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("DB_NAME", "sangokueue"),
+            "USER": os.environ.get("DB_USER", "sangokueue_user"),
+            "PASSWORD": os.environ["DB_PASSWORD"],
+            "HOST": host,
+            "PORT": os.environ.get("DB_PORT", "5432"),
+            "CONN_MAX_AGE": 600,
+        }
+        if host.endswith(".render.com"):
+            config["OPTIONS"] = {"sslmode": "require"}
+        DATABASES = {"default": config}
 else:
     DATABASES = {
         "default": {
@@ -168,6 +229,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 
 # Email
