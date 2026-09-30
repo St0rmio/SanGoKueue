@@ -14,22 +14,21 @@ class Command(BaseCommand):
         CAPACITE_MAX = 50
 
         while True:
-            maintenant = timezone.now()
-
             with transaction.atomic():
-                # 1. Trouver ceux dont le temps de manège est terminé
+                maintenant = timezone.now()
+            
+                # 1. Faire sortir ceux dont le temps est écoulé
                 sortants = VisiteurEnAttraction.objects.filter(heure_sortie_prevue__lte=maintenant)
-                nb_sortants = sortants.count()
-
-                if nb_sortants > 0:
-                    for visiteur in sortants:
-                        self.stdout.write(f"Sortie : Le billet {visiteur.billet.id} a terminé.")
-                        # Optionnel : archiver le billet dans l'historique avant de le supprimer
-                    
-                    # Retirer les visiteurs de l'attraction (libère de la place)
-                    sortants.delete() 
-
-                # 2. Vérifier combien de places sont maintenant disponibles
+                            
+                # Affichage optionnel dans le terminal
+                for visiteur in sortants:
+                    self.stdout.write(f"Sortie : Billet {visiteur.billet.numero_de_billet}")
+                            
+                # On les supprime du manège (les places redeviennent libres)
+                sortants.delete()
+            
+                # 2. Appeler les prochains de la file
+                # Calculer les places libres et passer "appele = True" aux X suivants
                 affluence = VisiteurEnAttraction.objects.count()
                 places_disponibles = CAPACITE_MAX - affluence
 

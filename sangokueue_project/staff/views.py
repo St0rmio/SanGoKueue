@@ -191,24 +191,27 @@ def staff_scan_billet(request):
             data = json.loads(request.body)
             numero_billet = data.get('numero_billet')
             
-            # Vérification 1 : Le billet est-il enregistré dans la file courante ?
-            en_file = EnFile.objects.get(numero_de_billet_id=numero_billet)
-            
-            # Vérification 2 : Éviter le double scan
-            if hasattr(en_file, 'visiteurenattraction'):
+            # 1. Vérifier s'il est déjà dans l'attraction
+            if VisiteurEnAttraction.objects.filter(billet_id=numero_billet).exists():
                 return JsonResponse({
                     'status': 'error', 
                     'message': "Ce visiteur est déjà dans l'attraction !"
                 })
             
-            # Succès : Création du visiteur en attraction (sans supprimer EnFile pour garder la liaison OneToOne)
+            # 2. Récupérer le billet dans la file d'attente
+            en_file = EnFile.objects.get(numero_de_billet_id=numero_billet)
+            
+            # 3. Succès : Création dans l'attraction
             duree_secondes = random.randint(30, 90)
             heure_sortie = timezone.now() + timedelta(seconds=duree_secondes)
             
             VisiteurEnAttraction.objects.create(
-                billet=en_file,
+                billet=en_file.numero_de_billet, # On passe l'objet Billet directement
                 heure_sortie_prevue=heure_sortie
             )
+            
+            # 4. On le supprime définitivement de la file
+            en_file.delete()
             
             return JsonResponse({
                 'status': 'success', 
@@ -216,8 +219,7 @@ def staff_scan_billet(request):
             })
             
         except EnFile.DoesNotExist:
-            # Rejet : Le billet n'est pas dans EnFile
             return JsonResponse({
                 'status': 'error', 
-                'message': "Billet invalide ou visiteur non présent dans la file d'attente."
+                'message': "Billet invalide ou non présent dans la file d'attente."
             })
