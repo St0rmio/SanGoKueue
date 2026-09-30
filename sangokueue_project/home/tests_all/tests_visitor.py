@@ -81,6 +81,8 @@ class TestVisitorPage(TestCase):
         response = self.client.get("/visiteur/H1/", HTTP_HX_REQUEST="true")
 
         self.assertContains(response, "Tu n'es plus dans la file")
+        self.assertContains(response, 'data-redirect="/home/"')
+        self.assertNotContains(response, 'hx-trigger="every 2s"')
         self.assertFalse(EnFile.objects.filter(numero_de_billet_id="H1").exists())
 
     def test_unknown_ticket_is_not_found(self):
@@ -112,6 +114,7 @@ class TestVisitorPage(TestCase):
         response = self.client.get("/visiteur/H1/")
 
         self.assertContains(response, "Quitter la file")
+        self.assertContains(response, "planifierRetourAccueil")
 
     def test_leaving_removes_the_visitor(self):
         self._ticket("H1")
@@ -120,8 +123,8 @@ class TestVisitorPage(TestCase):
         response = self.client.post("/visiteur/H1/", HTTP_HX_REQUEST="true")
 
         self.assertContains(response, "Tu n'es plus dans la file")
-        self.assertContains(response, 'window.location.assign("/home/")')
-        self.assertContains(response, "3000")
+        self.assertContains(response, 'data-redirect="/home/"')
+        self.assertContains(response, "Retour à l'accueil...")
         self.assertNotContains(response, 'hx-trigger="every 2s"')
         self.assertNotContains(response, "Quitter la file")
         self.assertFalse(

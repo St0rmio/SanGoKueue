@@ -49,8 +49,87 @@
     </div>
   </div>
 
-  {% include "visitor_position.html" %}
+    {% include "visitor_position.html" %}
+
+  <div class="text-center mt-4">
+    <button
+      id="enable-notifications"
+      class="btn btn-primary"
+      type="button"
+    >
+      Activer les notifications
+    </button>
+  </div>
 
 </div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if billet %}
+<script>
+function urlBase64ToUint8Array(base64String) {
+    const padding = "=".repeat((4 - base64String.length % 4) % 4);
+
+    const base64 = (base64String + padding)
+        .replace(/-/g, "+")
+        .replace(/_/g, "/");
+
+    const rawData = window.atob(base64);
+
+    return Uint8Array.from(
+        [...rawData].map(char => char.charCodeAt(0))
+    );
+}
+
+document
+    .getElementById("enable-notifications")
+    .addEventListener("click", async function() {
+
+        const permission = await Notification.requestPermission();
+
+        if (permission !== "granted") {
+            alert("Les notifications n'ont pas été autorisées.");
+            return;
+        }
+
+        const registration = await navigator.serviceWorker.register(
+            "/service-worker.js"
+        );
+
+        let subscription =
+            await registration.pushManager.getSubscription();
+
+        if (!subscription) {
+            subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(
+                    "{{ vapid_public_key }}"
+                )
+            });
+        }
+
+        const response = await fetch(
+            "{% url 'home:subscribe_push' %}",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": "{{ csrf_token }}"
+                },
+                body: JSON.stringify({
+                    visitorId: "{{ billet.pk }}",
+                    subscription: subscription.toJSON()
+                })
+            }
+        );
+
+        if (response.ok) {
+            alert("Notifications activées !");
+        } else {
+            alert("Erreur lors de l'activation des notifications.");
+        }
+    });
+</script>
 {% endif %}
 {% endblock %}

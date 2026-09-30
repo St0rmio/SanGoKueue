@@ -4,28 +4,28 @@
 
 {% block main %}
 
-<div class="w-100" style="max-width: 450px;">            
-  <h2 class="h4 text-center fw-bold mb-3 text-dark">Scannez votre billet</h2>
-  <div id="qr-reader" class="ratio ratio-1x1 camera-box mb-2 shadow-sm overflow-hidden">
-    <div id="qr-loading" class="d-flex flex-column align-items-center justify-content-center h-100 w-100">
-      <i class="bi bi-camera-video" style="font-size: 3rem;"></i>
-      <p class="mt-3 mb-0 fw-bold text-center">Activation de la caméra...</p>
-    </div>
-  </div>
+<div class="w-100" style="max-width: 450px;">
+<h2 class="h4 text-center fw-bold mb-3 text-dark">Scannez votre billet</h2>
+<div id="qr-reader" class="ratio ratio-1x1 camera-box mb-2 shadow-sm overflow-hidden">
+<div id="qr-loading" class="d-flex flex-column align-items-center justify-content-center h-100 w-100">
+<i class="bi bi-camera-video" style="font-size: 3rem;"></i>
+<p class="mt-3 mb-0 fw-bold text-center">Activation de la caméra...</p>
+</div>
+</div>
+<p id="qr-statut" class="small text-center text-muted mb-0" role="status"></p>
 
-  <div class="d-flex align-items-center my-4 text-muted">
-    <hr class="flex-grow-1 border-secondary opacity-50">
-    <span class="mx-3 fw-bold small text-uppercase">ou</span>
-    <hr class="flex-grow-1 border-secondary opacity-50">
-  </div>
+<div class="d-flex align-items-center my-4 text-muted">
+<hr class="flex-grow-1 border-secondary opacity-50">
+<span class="mx-3 fw-bold small text-uppercase">ou</span>
+<hr class="flex-grow-1 border-secondary opacity-50">
+</div>
 
-  <h2 class="h4 text-center fw-bold mb-3 text-dark">Entrez votre numéro de billet</h2>
-    <form action="{% url 'visitor' %}" method="get" class="px-2">
-      <div class="mb-3">
-        <label for="billet" class="visually-hidden">Numéro de billet</label>
-        <input id="billet" name="billet" type="text" class="form-control form-control-lg text-center shadow-sm" placeholder="Ex: 97fd2a68-3107-4e46-8b91-87f6a8c1ee10" required>
-      </div>
-      <button type="submit" class="btn btn-dbz btn-lg w-100 shadow-sm rounded-pill">
+<h2 class="h4 text-center fw-bold mb-3 text-dark">Entrez votre numéro de billet</h2>
+<form id="formulaire-billet" action="/visiteur/" method="get" class="px-2">
+<div class="mb-3">
+<input type="text" id="numero-billet" name="billet" class="form-control form-control-lg text-center shadow-sm" placeholder="Ex: Billet-12345" required>
+</div>
+<button type="submit" class="btn btn-dbz btn-lg w-100 shadow-sm rounded-pill">
         Entrer dans la file
 </button>
 </form>
@@ -35,13 +35,33 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    const html5QrCode = new Html5Qrcode("qr-reader");
+    const statut = document.getElementById("qr-statut");
     const champBillet = document.getElementById("numero-billet");
-
     const formulaire = document.getElementById("formulaire-billet");
+
+    // Petit message sous la caméra pour voir ce qui se passe
+    function afficher(message, erreur) {
+        statut.textContent = message;
+        statut.classList.toggle("text-danger", !!erreur);
+        statut.classList.toggle("text-muted", !erreur);
+    }
+
+    // Vérifications avant de démarrer
+    if (typeof Html5Qrcode === "undefined") {
+        afficher("Le scanner n'a pas pu être chargé (bibliothèque html5-qrcode introuvable). Vérifiez la connexion internet.", true);
+        return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        afficher("Caméra indisponible : ouvrez le site en http://127.0.0.1:8000 ou en HTTPS (pas en http://192.168…).", true);
+        return;
+    }
+
+    const html5QrCode = new Html5Qrcode("qr-reader", {
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],   // on ne cherche que des QR codes
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+    });
     let dejaLu = false;   // la bibliothèque appelle la fonction plusieurs fois par seconde
 
     // Le QR code contient un JSON (voir qr_code_generation.py) : on n'en garde que le numéro, le champ "id"
@@ -59,6 +79,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (dejaLu) return;
         dejaLu = true;
         const numero = extraireNumero(decodedText);
+        afficher("QR code lu (" + numero + "), ouverture de la page…", false);
         html5QrCode.stop()
             .catch((err) => console.error("Erreur lors de l'arrêt de la caméra.", err))
             .then(() => {
@@ -68,12 +89,16 @@ document.addEventListener("DOMContentLoaded", function () {
     };
 
     const config = {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
+        fps: 15,
+        qrbox: (largeur, hauteur) => {          // grande zone de lecture : les QR codes denses passent mieux
+            const cote = Math.floor(Math.min(largeur, hauteur) * 0.85);
+            return { width: cote, height: cote };
+        },
         aspectRatio: 1.0
     };
 
     html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess)
+        .then(() => afficher("Caméra active : présentez le QR code devant l'objectif.", false))
         .catch((err) => {
             const loadingDiv = document.getElementById("qr-loading");
             if (loadingDiv) {
@@ -82,6 +107,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     <p class="mt-3 mb-0 fw-bold text-danger text-center">Caméra inaccessible<br><small>Vérifiez les permissions de votre navigateur</small></p>
                 `;
             }
+            afficher("Impossible de démarrer la caméra : " + err, true);
             console.error("Erreur de démarrage de la caméra :", err);
         });
 });

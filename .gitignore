@@ -143,4 +143,10 @@ GitHub.sublime-settings
 # Mac
 .DS_Store
 
+<<<<<<< Updated upstream
 *.zip
+=======
+# Cles VAPID pour les notifications push
+/sangokueue_project/private_key.pem
+/sangokueue_project/public_key.pem
+>>>>>>> Stashed changes

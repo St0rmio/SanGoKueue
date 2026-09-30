@@ -1,7 +1,7 @@
 from django.db import models
 from django.utils import timezone
 
-# Create your models here.
+
 class Billet(models.Model):
 
     class Priorite(models.IntegerChoices):
@@ -18,6 +18,7 @@ class Billet(models.Model):
         choices=Priorite.choices,
         default=Priorite.HUMAN
     )
+
 
 class EnFile(models.Model):
     numero_de_billet = models.ForeignKey(Billet, on_delete=models.CASCADE)
@@ -51,3 +52,14 @@ class VisiteurEnAttraction(models.Model):
 
     def __str__(self):
         return f"Billet {self.billet.numero_de_billet} - Sortie à {self.heure_sortie_prevue.strftime('%H:%M:%S')}"
+
+
+class PushSubscription(models.Model):
+    numero_de_billet = models.ForeignKey(
+        Billet,
+        on_delete=models.CASCADE,
+    )
+
+    endpoint = models.TextField(unique=True)
+    p256dh = models.TextField()
+    auth = models.TextField()

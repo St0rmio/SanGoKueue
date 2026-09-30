@@ -42,13 +42,26 @@
         </div>
     </footer>
 
-    <script src="{% static 'home/js/scanner.js' %}"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.body.addEventListener('htmx:configRequest', (event) => {
         event.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
                 });
+
+        function planifierRetourAccueil() {
+            const bloc = document.querySelector("#visitor-position[data-redirect]");
+            if (!bloc) {
+                return;
+            }
+            clearTimeout(window.__retourAccueil);
+            const url = bloc.dataset.redirect;
+            window.__retourAccueil = setTimeout(function () {
+                window.location.assign(url);
+            }, 3000);
+        }
+        document.addEventListener("DOMContentLoaded", planifierRetourAccueil);
+        document.body.addEventListener("htmx:afterSwap", planifierRetourAccueil);
     </script>
 
     {% block extra_js %}{% endblock %}
