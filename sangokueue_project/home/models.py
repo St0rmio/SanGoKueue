@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 # Create your models here.
 class Billet(models.Model):
@@ -41,3 +42,12 @@ class EtatFile(models.Model):
     nom_file = models.CharField(max_length=64, primary_key=True)
     en_pause = models.BooleanField(default=False)
     mise_en_pause_le = models.DateTimeField(null=True, blank=True)
+
+
+class VisiteurEnAttraction(models.Model):
+    billet = models.OneToOneField('EnFile', on_delete=models.CASCADE) 
+    heure_entree = models.DateTimeField(default=timezone.now)
+    heure_sortie_prevue = models.DateTimeField()
+
+    def __str__(self):
+        return f"Billet {self.billet.numero_de_billet_id} - Sortie à {self.heure_sortie_prevue.strftime('%H:%M:%S')}"

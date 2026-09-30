@@ -141,3 +141,5 @@ GitHub.sublime-settings
 
 # Mac
 .DS_Store
+
+*.zip
