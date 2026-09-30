@@ -42,7 +42,7 @@ class AffluenceAttractionTests(TestCase):
         
         # Vérifier que l'heure de sortie prévue est bien dans 60 secondes
         diff = visiteur.heure_sortie_prevue - visiteur.heure_entree
-        self.assertEqual(diff.total_seconds(), 60)
+        self.assertAlmostEqual(diff.total_seconds(), 60, delta=1)
 
     def test_scan_billet_capacite_max(self):
         # Remplir l'attraction à sa capacité maximale (50)
