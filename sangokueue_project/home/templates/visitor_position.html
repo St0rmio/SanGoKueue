@@ -9,20 +9,27 @@
      {% endif %}>
   {% if expire %}
     <h1 class="dbz-title">Billet expiré</h1>
+  {% elif dans_attraction %}
+    <h1 class="dbz-title">C'est validé</h1>
+    <p class="fs-4">Bon amusement dans l'attraction.</p>
   {% elif absent %}
     <h1 class="dbz-title">Tu n'es plus dans la file</h1>
   {% elif appele %}
     <h1 class="dbz-title">Tu es appelé</h1>
-    <p class="fs-4">Il te reste {{ attente_minutes }} min pour te présenter.</p>
+    <p class="fs-4">{{ message_appel }}</p>
+    <p class="fs-5">Temps restant : <strong>{{ attente_restante }}</strong></p>
   {% else %}
     <h1 class="dbz-title">File d'attente</h1>
+    {% if renvoye %}
+      <p class="fs-5">Le délai est dépassé. Vous repartez en fin de file.</p>
+    {% endif %}
     <p class="fs-4 mb-1">Position <strong>{{ position }}</strong></p>
     <p class="fs-5">Attente : environ <strong>{{ attente_texte }}</strong></p>
   {% endif %}
   {% if quitte or absent and not expire %}
     <p class="mt-3 mb-0">Retour à l'accueil...</p>
   {% endif %}
-  {% if not expire and not absent %}
+  {% if not expire and not absent and not dans_attraction %}
     <form method="post"
           class="mt-4"
           action="{% url 'visitor_billet' billet.pk %}"

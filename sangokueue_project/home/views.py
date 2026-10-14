@@ -1,29 +1,43 @@
 import json
-import queue
+import random
+import time
+from datetime import timedelta
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.http import Http404, HttpResponse, JsonResponse
+from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
-from django.shortcuts import render
+
 from home import queues
-from home.models import Billet, EnFile, EtatFile, PushSubscription
+from home.models import Billet, EnFile, EtatFile, PushSubscription, VisiteurEnAttraction
 from home.notifications import send_notification
-from django.conf import settings
 from home.push_notifications import send_push_notification
 
 
 TEMPS_MOYEN_PAR_PERSONNE = 40
 ATTENTE_PRIORITE_SAIYAN = 25 * 60
-DELAI_PRESENTATION = 10 * 60
+DELAI_PRESENTATION = 5 * 60
+CAPACITE_MAX = 50
 QUEUE_NAME = "attraction"
+MESSAGE_APPEL = (
+    "Vous êtes appelés, veuillez vous rendre dans les "
+    f"{DELAI_PRESENTATION // 60} mins dans l'attraction."
+)
+MESSAGE_RENVOI = (
+    "Le délai est dépassé. Vous repartez en fin de file."
+)
 SEUIL_NOTIFICATION_10_MIN = 10 * 60
 SEUIL_NOTIFICATION_5_MIN = 5 * 60
 
 
 def home(request):
-    return render(request, 'home.html')
+    return render(
+        request,
+        "home.html",
+    )
 
 
 def service_worker(request):
@@ -36,6 +50,7 @@ def service_worker(request):
 
 def _join_queue(billet):
     """Place le billet dans la file unique. None si le billet est expiré."""
+
     if billet.date < timezone.localdate():
         return None
 
@@ -53,11 +68,13 @@ def _join_queue(billet):
                 numero_de_billet=billet,
                 nom_file=QUEUE_NAME,
             )
+
             queues.append_to_queue(
                 QUEUE_NAME,
                 billet.pk,
                 billet.priorite,
             )
+
             return entree
 
     except IntegrityError:
@@ -67,7 +84,161 @@ def _join_queue(billet):
         )
 
 
-def _wait_context(billet, entree):
+def places_disponibles():
+    """Places libres hors visiteurs déjà présents ou déjà appelés."""
+    presents = VisiteurEnAttraction.objects.count()
+    appeles = EnFile.objects.filter(appele=True).count()
+    return max(0, CAPACITE_MAX - presents - appeles)
+
+
+def _renvoyer_en_fin_de_file(entree, maintenant):
+    ticket_id = entree.numero_de_billet_id
+    queue = entree.nom_file
+    priorite = entree.numero_de_billet.priorite
+    entree.appele = False
+    entree.deja_appele = True
+    entree.date_appel = None
+    entree.secondes_pause = 0
+    entree.secondes_pause_appel = 0
+    entree.notification_appel_envoyee = False
+    entree.date_entree = maintenant
+    entree.save(update_fields=[
+        "appele",
+        "deja_appele",
+        "date_appel",
+        "secondes_pause",
+        "secondes_pause_appel",
+        "notification_appel_envoyee",
+        "date_entree",
+    ])
+    queues.remove_from_queue(queue, ticket_id)
+    queues.append_to_queue(queue, ticket_id, priorite)
+    send_notification(ticket_id, MESSAGE_RENVOI)
+    return ticket_id
+
+
+def expirer_appels(queue=None):
+    """Renvoie en fin de file les appelés non validés dans les 5 min."""
+    maintenant = timezone.now()
+    filtres = {"appele": True}
+    if queue:
+        filtres["nom_file"] = queue
+        etat = EtatFile.objects.filter(nom_file=queue).first()
+        if etat is not None and etat.en_pause:
+            return set()
+
+    renvoyes = set()
+    with transaction.atomic():
+        appeles = list(
+            EnFile.objects.select_for_update()
+            .filter(**filtres)
+            .select_related("numero_de_billet")
+        )
+        for entree in appeles:
+            etat = EtatFile.objects.filter(nom_file=entree.nom_file).first()
+            if etat is not None and etat.en_pause:
+                continue
+            restant = _secondes_restantes_appel(entree, etat, maintenant)
+            if restant != 0:
+                continue
+            renvoyes.add(_renvoyer_en_fin_de_file(entree, maintenant))
+    return renvoyes
+
+
+def appeler_suivants(queue, nombre=None):
+    """Appelle autant de visiteurs que de places libres (ou `nombre`)."""
+    etat = EtatFile.objects.filter(nom_file=queue).first()
+    if etat is not None and etat.en_pause:
+        return []
+
+    expirer_appels(queue)
+    a_appeler = places_disponibles() if nombre is None else max(0, int(nombre))
+    if a_appeler <= 0:
+        return []
+
+    maintenant = timezone.now()
+    appeles = []
+    with transaction.atomic():
+        entrees = list(
+            EnFile.objects.select_for_update()
+            .filter(nom_file=queue, appele=False)
+            .select_related("numero_de_billet")
+        )
+        ordre = _ordre_attente(entrees, etat, maintenant)[:a_appeler]
+        for suivant in ordre:
+            suivant.appele = True
+            suivant.deja_appele = True
+            suivant.date_appel = maintenant
+            suivant.secondes_pause_appel = 0
+            suivant.save(update_fields=[
+                "appele",
+                "deja_appele",
+                "date_appel",
+                "secondes_pause_appel",
+            ])
+            appeles.append(suivant)
+
+    for suivant in appeles:
+        ticket_id = suivant.numero_de_billet_id
+        queues.remove_from_queue(queue, ticket_id)
+        queues.remember_called(queue, ticket_id)
+        send_notification(ticket_id, MESSAGE_APPEL)
+        if (
+            PushSubscription.objects.filter(numero_de_billet_id=ticket_id).exists()
+            and not suivant.notification_appel_envoyee
+        ):
+            send_push_notification(ticket_id, MESSAGE_APPEL)
+            suivant.notification_appel_envoyee = True
+            suivant.save(update_fields=["notification_appel_envoyee"])
+
+    if appeles:
+        envoyer_notifications_attente(queue)
+
+    return appeles
+
+
+def valider_entree(numero_billet):
+    """Staff valide un billet appelé : entre dans l'attraction."""
+    expirer_appels()
+    if VisiteurEnAttraction.objects.filter(billet_id=numero_billet).exists():
+        return False, "Ce visiteur est déjà dans l'attraction.", 400
+    if VisiteurEnAttraction.objects.count() >= CAPACITE_MAX:
+        return False, f"Attraction pleine ({CAPACITE_MAX}/{CAPACITE_MAX}).", 400
+
+    try:
+        billet = Billet.objects.get(pk=numero_billet)
+    except Billet.DoesNotExist:
+        return False, "Billet invalide.", 404
+
+    try:
+        entree = EnFile.objects.select_related("numero_de_billet").get(
+            numero_de_billet=billet,
+        )
+    except EnFile.DoesNotExist:
+        return False, "Billet invalide ou non présent dans la file d'attente.", 404
+
+    if not entree.appele:
+        return False, "Ce visiteur n'a pas encore été appelé.", 400
+
+    duree_secondes = random.randint(30, 90)
+    heure_sortie = timezone.now() + timedelta(seconds=duree_secondes)
+    VisiteurEnAttraction.objects.create(
+        billet=billet,
+        heure_sortie_prevue=heure_sortie,
+    )
+    queue = entree.nom_file
+    queues.remove_from_queue(queue, numero_billet)
+    entree.delete()
+    return True, "Billet valide. Visiteur entré dans l'attraction.", 200
+
+
+def _wait_context(billet, entree, renvoye=False):
+    if VisiteurEnAttraction.objects.filter(billet_id=billet.pk).exists():
+        return {
+            "billet": billet,
+            "dans_attraction": True,
+        }
+
     if entree is None:
         return {
             "billet": billet,
@@ -90,59 +261,94 @@ def _wait_context(billet, entree):
             "billet": billet,
             "position": None,
             "attente_minutes": (restant or 0) // 60,
+            "attente_restante": _formater_duree(restant or 0),
             "appele": True,
+            "message_appel": MESSAGE_APPEL,
         }
 
     devant = _personnes_devant(entree)
     position = devant + 1
-    attente_secondes = devant * TEMPS_MOYEN_PAR_PERSONNE
+
+    attente_secondes = (
+        devant
+        * TEMPS_MOYEN_PAR_PERSONNE
+    )
 
     return {
         "billet": billet,
         "position": position,
-        "attente_texte": _formater_duree(attente_secondes),
+        "attente_texte": _formater_duree(
+            attente_secondes
+        ),
         "appele": False,
+        "renvoye": renvoye,
     }
 
 
 def visitor(request, numero=None):
     """Affiche l'espace visiteur et l'inscrit dans la file."""
-    numero = (numero or request.GET.get("billet") or "").strip()
+
+    numero = (
+        numero
+        or request.GET.get("billet")
+        or ""
+    ).strip()
 
     if not numero:
         return render(
             request,
             "interface_visiteur.html",
-            {"billet": None},
+            {
+                "billet": None,
+            },
         )
 
     try:
-        billet = Billet.objects.get(pk=numero)
-    except Billet.DoesNotExist:
-        raise Http404("Billet introuvable.")
+        billet = Billet.objects.get(
+            pk=numero
+        )
 
-    refreshing = bool(request.headers.get("HX-Request"))
+    except Billet.DoesNotExist:
+        raise Http404(
+            "Billet introuvable."
+        )
+
+    refreshing = bool(
+        request.headers.get(
+            "HX-Request"
+        )
+    )
 
     if request.method == "POST":
-        remove_visitor(billet.pk, QUEUE_NAME)
+        remove_visitor(
+            billet.pk,
+            QUEUE_NAME,
+        )
+
         entree = None
+        renvoye = False
 
     elif refreshing:
+        renvoyes = expirer_appels(QUEUE_NAME)
         entree = EnFile.objects.filter(
             numero_de_billet=billet,
             nom_file=QUEUE_NAME,
         ).first()
+        renvoye = billet.pk in renvoyes
 
     else:
         entree = _join_queue(billet)
+        renvoye = False
 
-    context = _wait_context(billet, entree)
+    context = _wait_context(billet, entree, renvoye)
 
     if request.method == "POST":
         context["quitte"] = True
 
     if not refreshing:
-        context["vapid_public_key"] = settings.VAPID_PUBLIC_KEY
+        context["vapid_public_key"] = (
+            settings.VAPID_PUBLIC_KEY
+        )
 
     template = (
         "visitor_position.html"
@@ -150,11 +356,16 @@ def visitor(request, numero=None):
         else "interface_visiteur.html"
     )
 
-    return render(request, template, context)
+    return render(
+        request,
+        template,
+        context,
+    )
 
 
 def _instant(etat, maintenant):
     """Horloge de la file : figée tant que la pause est active."""
+
     if (
         etat is not None
         and etat.en_pause
@@ -165,8 +376,15 @@ def _instant(etat, maintenant):
     return maintenant
 
 
-def _attente_secondes(entree, etat, maintenant):
-    fin = _instant(etat, maintenant)
+def _attente_secondes(
+    entree,
+    etat,
+    maintenant,
+):
+    fin = _instant(
+        etat,
+        maintenant,
+    )
 
     if entree.date_entree >= fin:
         return 0
@@ -174,34 +392,60 @@ def _attente_secondes(entree, etat, maintenant):
     return max(
         0,
         int(
-            (fin - entree.date_entree).total_seconds()
-        ) - entree.secondes_pause,
+            (
+                fin
+                - entree.date_entree
+            ).total_seconds()
+        )
+        - entree.secondes_pause,
     )
 
 
-def _secondes_restantes_appel(entree, etat, maintenant):
-    if not entree.appele or entree.date_appel is None:
+def _secondes_restantes_appel(
+    entree,
+    etat,
+    maintenant,
+):
+    if (
+        not entree.appele
+        or entree.date_appel is None
+    ):
         return None
 
-    fin = _instant(etat, maintenant)
+    fin = _instant(
+        etat,
+        maintenant,
+    )
 
     if entree.date_appel >= fin:
         ecoule = 0
+
     else:
         ecoule = (
             int(
-                (fin - entree.date_appel).total_seconds()
+                (
+                    fin
+                    - entree.date_appel
+                ).total_seconds()
             )
             - entree.secondes_pause_appel
         )
 
     return max(
         0,
-        DELAI_PRESENTATION - max(0, ecoule),
+        DELAI_PRESENTATION
+        - max(
+            0,
+            ecoule,
+        ),
     )
 
 
-def _prochain_saiyan_ou_humain(entrees, etat, maintenant):
+def _prochain_saiyan_ou_humain(
+    entrees,
+    etat,
+    maintenant,
+):
     saiyans = [
         entree
         for entree in entrees
@@ -254,14 +498,25 @@ def _prochain_saiyan_ou_humain(entrees, etat, maintenant):
     ):
         return saiyan
 
-    if saiyan.date_entree <= humain.date_entree:
+    if (
+        saiyan.date_entree
+        <= humain.date_entree
+    ):
         return saiyan
 
     return humain
 
 
-def _ordre_attente(entrees, etat, maintenant):
-    """Ordre d'appel : Super Saiyan, puis Saiyan/Humain selon l'attente figée."""
+def _ordre_attente(
+    entrees,
+    etat,
+    maintenant,
+):
+    """
+    Ordre d'appel :
+    Super Saiyan, puis Saiyan/Humain selon l'attente figée.
+    """
+
     en_ligne = [
         entree
         for entree in entrees
@@ -292,7 +547,9 @@ def _ordre_attente(entrees, etat, maintenant):
         )
     ]
 
-    ordre = list(super_saiyans)
+    ordre = list(
+        super_saiyans
+    )
 
     while autres:
         suivant = _prochain_saiyan_ou_humain(
@@ -300,14 +557,21 @@ def _ordre_attente(entrees, etat, maintenant):
             etat,
             maintenant,
         )
-        ordre.append(suivant)
-        autres.remove(suivant)
+
+        ordre.append(
+            suivant
+        )
+
+        autres.remove(
+            suivant
+        )
 
     return ordre
 
 
 def _personnes_devant(entree):
     """Visiteurs déjà en attente qui passeront avant cette entrée."""
+
     etat = EtatFile.objects.filter(
         nom_file=entree.nom_file
     ).first()
@@ -318,7 +582,9 @@ def _personnes_devant(entree):
         EnFile.objects.filter(
             nom_file=entree.nom_file,
             appele=False,
-        ).select_related("numero_de_billet")
+        ).select_related(
+            "numero_de_billet"
+        )
     )
 
     for index, candidat in enumerate(
@@ -331,7 +597,9 @@ def _personnes_devant(entree):
         if candidat.pk == entree.pk:
             return index
 
-    return len(entrees)
+    return len(
+        entrees
+    )
 
 
 def _formater_duree(secondes):
@@ -341,27 +609,47 @@ def _formater_duree(secondes):
     if secondes < 60:
         return "moins d'une minute"
 
-    return f"{secondes // 60} min"
+    return (
+        f"{secondes // 60} min"
+    )
 
-def _notification_attente_a_envoyer(entree):
+
+def _notification_attente_a_envoyer(
+    entree,
+):
     if entree.appele:
         return None
 
-    devant = _personnes_devant(entree)
+    devant = _personnes_devant(
+        entree
+    )
 
     if devant <= 0:
         return None
 
-    position = devant + 1
-    secondes = devant * TEMPS_MOYEN_PAR_PERSONNE
-    temps = _formater_duree(secondes)
+    position = (
+        devant + 1
+    )
 
+    secondes = (
+        devant
+        * TEMPS_MOYEN_PAR_PERSONNE
+    )
+
+    temps = _formater_duree(
+        secondes
+    )
+
+    # Une seule personne devant
     if devant == 1:
-        if entree.notification_prochain_envoyee:
+        if (
+            entree.notification_prochain_envoyee
+        ):
             return None
 
         return {
-            "champ": "notification_prochain_envoyee",
+            "champ":
+                "notification_prochain_envoyee",
             "message": (
                 "Votre tour approche ! "
                 "Il ne reste plus qu'une personne devant vous. "
@@ -370,7 +658,11 @@ def _notification_attente_a_envoyer(entree):
             ),
         }
 
-    if secondes <= SEUIL_NOTIFICATION_5_MIN:
+    # Environ 5 minutes
+    if (
+        secondes
+        <= SEUIL_NOTIFICATION_5_MIN
+    ):
         if (
             entree.notification_5min_envoyee
             or entree.notification_prochain_envoyee
@@ -378,7 +670,8 @@ def _notification_attente_a_envoyer(entree):
             return None
 
         return {
-            "champ": "notification_5min_envoyee",
+            "champ":
+                "notification_5min_envoyee",
             "message": (
                 "Votre tour approche. "
                 f"Position {position}. "
@@ -387,7 +680,11 @@ def _notification_attente_a_envoyer(entree):
             ),
         }
 
-    if secondes <= SEUIL_NOTIFICATION_10_MIN:
+    # Environ 10 minutes
+    if (
+        secondes
+        <= SEUIL_NOTIFICATION_10_MIN
+    ):
         if (
             entree.notification_10min_envoyee
             or entree.notification_5min_envoyee
@@ -396,7 +693,8 @@ def _notification_attente_a_envoyer(entree):
             return None
 
         return {
-            "champ": "notification_10min_envoyee",
+            "champ":
+                "notification_10min_envoyee",
             "message": (
                 "Votre tour approche. "
                 f"Position {position}. "
@@ -405,25 +703,43 @@ def _notification_attente_a_envoyer(entree):
         }
 
     return None
-def envoyer_notifications_attente(queue):
-    entrees = EnFile.objects.filter(
-        nom_file=queue,
-        appele=False,
-    ).select_related("numero_de_billet")
+
+
+def envoyer_notifications_attente(
+    queue,
+):
+    entrees = (
+        EnFile.objects.filter(
+            nom_file=queue,
+            appele=False,
+        )
+        .select_related(
+            "numero_de_billet"
+        )
+    )
 
     notifications_envoyees = []
 
     for entree in entrees:
-        notification = _notification_attente_a_envoyer(entree)
+        notification = (
+            _notification_attente_a_envoyer(
+                entree
+            )
+        )
 
         if notification is None:
             continue
 
-        # On n'enregistre pas la notification comme envoyée
-        # si le visiteur n'a pas activé les notifications push.
-        abonnement_existe = PushSubscription.objects.filter(
-            numero_de_billet_id=entree.numero_de_billet_id
-        ).exists()
+        # Ne pas marquer la notification
+        # comme envoyée si le visiteur
+        # n'a pas activé les Push.
+        abonnement_existe = (
+            PushSubscription.objects.filter(
+                numero_de_billet_id=(
+                    entree.numero_de_billet_id
+                )
+            ).exists()
+        )
 
         if not abonnement_existe:
             continue
@@ -433,18 +749,38 @@ def envoyer_notifications_attente(queue):
             notification["message"],
         )
 
-        champ = notification["champ"]
+        champ = notification[
+            "champ"
+        ]
 
-        setattr(entree, champ, True)
-        entree.save(update_fields=[champ])
+        setattr(
+            entree,
+            champ,
+            True,
+        )
 
-        notifications_envoyees.append({
-            "visitorId": entree.numero_de_billet_id,
-            "message": notification["message"],
-        })
+        entree.save(
+            update_fields=[
+                champ
+            ]
+        )
+
+        notifications_envoyees.append(
+            {
+                "visitorId":
+                    entree.numero_de_billet_id,
+                "message":
+                    notification["message"],
+            }
+        )
 
     return notifications_envoyees
-def _message_notification(position, secondes):
+
+
+def _message_notification(
+    position,
+    secondes,
+):
     return (
         "Vous avez rejoint la file. "
         f"Position {position}. "
@@ -452,9 +788,14 @@ def _message_notification(position, secondes):
     )
 
 
-def _erreur(message, status):
+def _erreur(
+    message,
+    status,
+):
     return JsonResponse(
-        {"error": message},
+        {
+            "error": message
+        },
         status=status,
     )
 
@@ -463,7 +804,8 @@ def _erreur(message, status):
 def subscribe_push(request):
     try:
         data = json.loads(
-            request.body.decode() or "{}"
+            request.body.decode()
+            or "{}"
         )
 
     except (
@@ -471,7 +813,9 @@ def subscribe_push(request):
         json.JSONDecodeError,
     ):
         return JsonResponse(
-            {"success": False},
+            {
+                "success": False
+            },
             status=400,
         )
 
@@ -480,46 +824,68 @@ def subscribe_push(request):
             pk=data["visitorId"]
         )
 
-        subscription = data["subscription"]
-        keys = subscription["keys"]
+        subscription = data[
+            "subscription"
+        ]
+
+        keys = subscription[
+            "keys"
+        ]
 
         PushSubscription.objects.update_or_create(
-            endpoint=subscription["endpoint"],
+            endpoint=subscription[
+                "endpoint"
+            ],
             defaults={
-                "numero_de_billet": billet,
-                "p256dh": keys["p256dh"],
-                "auth": keys["auth"],
+                "numero_de_billet":
+                    billet,
+                "p256dh":
+                    keys["p256dh"],
+                "auth":
+                    keys["auth"],
             },
         )
+
         entree = EnFile.objects.filter(
             numero_de_billet=billet,
             nom_file=QUEUE_NAME,
         ).first()
 
         if entree is not None:
-            envoyer_notifications_attente(QUEUE_NAME)
-            
+            envoyer_notifications_attente(
+                QUEUE_NAME
+            )
+
     except (
         KeyError,
         Billet.DoesNotExist,
     ):
         return JsonResponse(
-            {"success": False},
+            {
+                "success": False
+            },
             status=400,
         )
 
     return JsonResponse(
-        {"success": True}
+        {
+            "success": True
+        }
     )
 
 
 @csrf_exempt
 @require_POST
 def append_to_queue(request):
-    """Inscrit un billet déjà authentifié dans la file et renvoie l'estimation."""
+    """
+    Inscrit un billet déjà authentifié dans la file
+    et renvoie l'estimation.
+    """
+
     try:
         corps = json.loads(
-            request.body.decode() or "{}"
+            request.body.decode()
+            or "{}"
         )
 
     except (
@@ -531,17 +897,28 @@ def append_to_queue(request):
             400,
         )
 
-    if not isinstance(corps, dict):
+    if not isinstance(
+        corps,
+        dict,
+    ):
         return _erreur(
             "Corps JSON invalide.",
             400,
         )
 
-    visitor_id = corps.get("visitorId")
-    queue = corps.get("queue")
+    visitor_id = corps.get(
+        "visitorId"
+    )
+
+    queue = corps.get(
+        "queue"
+    )
 
     if (
-        not isinstance(visitor_id, str)
+        not isinstance(
+            visitor_id,
+            str,
+        )
         or not visitor_id.strip()
     ):
         return _erreur(
@@ -550,7 +927,10 @@ def append_to_queue(request):
         )
 
     if (
-        not isinstance(queue, str)
+        not isinstance(
+            queue,
+            str,
+        )
         or not queue.strip()
     ):
         return _erreur(
@@ -558,8 +938,13 @@ def append_to_queue(request):
             400,
         )
 
-    visitor_id = visitor_id.strip()
-    queue = queue.strip()
+    visitor_id = (
+        visitor_id.strip()
+    )
+
+    queue = (
+        queue.strip()
+    )
 
     try:
         billet = Billet.objects.get(
@@ -572,7 +957,10 @@ def append_to_queue(request):
             404,
         )
 
-    if billet.date < timezone.localdate():
+    if (
+        billet.date
+        < timezone.localdate()
+    ):
         return _erreur(
             "Billet expiré.",
             400,
@@ -589,9 +977,11 @@ def append_to_queue(request):
 
     try:
         with transaction.atomic():
-            entree = EnFile.objects.create(
-                numero_de_billet=billet,
-                nom_file=queue,
+            entree = (
+                EnFile.objects.create(
+                    numero_de_billet=billet,
+                    nom_file=queue,
+                )
             )
 
             queues.append_to_queue(
@@ -606,8 +996,14 @@ def append_to_queue(request):
             409,
         )
 
-    devant = _personnes_devant(entree)
-    position = devant + 1
+    devant = _personnes_devant(
+        entree
+    )
+
+    position = (
+        devant + 1
+    )
+
     secondes = (
         devant
         * TEMPS_MOYEN_PAR_PERSONNE
@@ -615,21 +1011,33 @@ def append_to_queue(request):
 
     return JsonResponse(
         {
-            "visitorId": visitor_id,
-            "queue": queue,
-            "position": position,
-            "estimatedWaitSeconds": secondes,
-            "notification": _message_notification(
+            "visitorId":
+                visitor_id,
+            "queue":
+                queue,
+            "position":
                 position,
+            "estimatedWaitSeconds":
                 secondes,
-            ),
+            "notification":
+                _message_notification(
+                    position,
+                    secondes,
+                ),
         },
         status=201,
     )
 
 
-def remove_visitor(visitor_id, queue):
-    """Remove a ticket from a queue. None if it is not queued."""
+def remove_visitor(
+    visitor_id,
+    queue,
+):
+    """
+    Remove a ticket from a queue.
+    None if it is not queued.
+    """
+
     try:
         entree = EnFile.objects.get(
             numero_de_billet_id=visitor_id,
@@ -645,28 +1053,49 @@ def remove_visitor(visitor_id, queue):
         queue,
         visitor_id,
     )
-    envoyer_notifications_attente(queue)
+
+    # Les visiteurs derrière avancent :
+    # on vérifie les seuils de notification.
+    envoyer_notifications_attente(
+        queue
+    )
+
     return {
-        "visitorId": visitor_id,
-        "queue": queue,
-        "left": True,
+        "visitorId":
+            visitor_id,
+        "queue":
+            queue,
+        "left":
+            True,
     }
 
 
 @csrf_exempt
-@require_http_methods(["DELETE"])
+@require_http_methods(
+    ["DELETE"]
+)
 def leave_queue(request):
-    """Permet à un participant de quitter une file d'attente."""
-    visitor_id = request.GET.get(
-        "visitorId"
+    """
+    Permet à un participant de quitter une file d'attente.
+    """
+
+    visitor_id = (
+        request.GET.get(
+            "visitorId"
+        )
     )
 
-    queue = request.GET.get(
-        "queue"
+    queue = (
+        request.GET.get(
+            "queue"
+        )
     )
 
     if (
-        not isinstance(visitor_id, str)
+        not isinstance(
+            visitor_id,
+            str,
+        )
         or not visitor_id.strip()
     ):
         return _erreur(
@@ -675,7 +1104,10 @@ def leave_queue(request):
         )
 
     if (
-        not isinstance(queue, str)
+        not isinstance(
+            queue,
+            str,
+        )
         or not queue.strip()
     ):
         return _erreur(
@@ -694,7 +1126,9 @@ def leave_queue(request):
             404,
         )
 
-    return JsonResponse(result)
+    return JsonResponse(
+        result
+    )
 
 
 MESSAGE_FILE_VIDEE = (
@@ -704,7 +1138,11 @@ MESSAGE_FILE_VIDEE = (
 
 
 def clear_visitors(queue):
-    """Remove every visitor from a queue."""
+    """
+    Remove every visitor from a queue
+    et les notifier.
+    """
+
     entrees = list(
         EnFile.objects.filter(
             nom_file=queue
@@ -728,10 +1166,24 @@ def clear_visitors(queue):
         for entree in entrees
     ]
 
+    # Notification temps réel + Push
     for notification in notifications:
         send_notification(
-            notification["visitorId"],
-            notification["message"],
+            notification[
+                "visitorId"
+            ],
+            notification[
+                "message"
+            ],
+        )
+
+        send_push_notification(
+            notification[
+                "visitorId"
+            ],
+            notification[
+                "message"
+            ],
         )
 
     if entrees:
@@ -742,7 +1194,9 @@ def clear_visitors(queue):
             ]
         ).delete()
 
-    queues.clear_queue(queue)
+    queues.clear_queue(
+        queue
+    )
 
     etat = EtatFile.objects.filter(
         nom_file=queue
@@ -758,20 +1212,36 @@ def clear_visitors(queue):
         )
 
     return {
-        "queue": queue,
-        "removed": len(notifications),
-        "notifications": notifications,
+        "queue":
+            queue,
+        "removed":
+            len(
+                notifications
+            ),
+        "notifications":
+            notifications,
     }
 
 
 @csrf_exempt
-@require_http_methods(["DELETE"])
+@require_http_methods(
+    ["DELETE"]
+)
 def clear_queue(request):
-    """Retire immédiatement tous les visiteurs d'une file et les notifie."""
-    queue = request.GET.get("queue")
+    """
+    Retire immédiatement tous les visiteurs
+    d'une file et les notifie.
+    """
+
+    queue = request.GET.get(
+        "queue"
+    )
 
     if (
-        not isinstance(queue, str)
+        not isinstance(
+            queue,
+            str,
+        )
         or not queue.strip()
     ):
         return _erreur(
@@ -815,7 +1285,9 @@ def _reprendre(
     etat,
     maintenant,
 ):
-    debut = etat.mise_en_pause_le
+    debut = (
+        etat.mise_en_pause_le
+    )
 
     if debut is not None:
         for entree in EnFile.objects.filter(
@@ -829,7 +1301,10 @@ def _reprendre(
                 )
             )
 
-            if entree.date_appel is not None:
+            if (
+                entree.date_appel
+                is not None
+            ):
                 entree.secondes_pause_appel += (
                     _duree_a_exclure(
                         entree.date_appel,
@@ -963,7 +1438,9 @@ def _notifications_file(
         position = (
             None
             if entree.appele
-            else positions[entree.pk]
+            else positions[
+                entree.pk
+            ]
         )
 
         secondes = (
@@ -971,7 +1448,8 @@ def _notifications_file(
             if position is None
             else (
                 position - 1
-            ) * TEMPS_MOYEN_PAR_PERSONNE
+            )
+            * TEMPS_MOYEN_PAR_PERSONNE
         )
 
         notifications.append(
@@ -998,9 +1476,15 @@ def _notifications_file(
 
 
 @csrf_exempt
-@require_http_methods(["PATCH"])
+@require_http_methods(
+    ["PATCH"]
+)
 def pause_queue(request):
-    """Met une file en pause ou la reprend, sans faire avancer les délais."""
+    """
+    Met une file en pause ou la reprend,
+    sans faire avancer les délais.
+    """
+
     try:
         corps = json.loads(
             request.body.decode()
@@ -1016,17 +1500,28 @@ def pause_queue(request):
             400,
         )
 
-    if not isinstance(corps, dict):
+    if not isinstance(
+        corps,
+        dict,
+    ):
         return _erreur(
             "Corps JSON invalide.",
             400,
         )
 
-    queue = corps.get("queue")
-    paused = corps.get("paused")
+    queue = corps.get(
+        "queue"
+    )
+
+    paused = corps.get(
+        "paused"
+    )
 
     if (
-        not isinstance(queue, str)
+        not isinstance(
+            queue,
+            str,
+        )
         or not queue.strip()
     ):
         return _erreur(
@@ -1055,7 +1550,11 @@ def set_queue_pause(
     queue,
     paused,
 ):
-    """Pause or resume a queue without advancing timers."""
+    """
+    Pause ou reprend une file
+    sans avancer les compteurs.
+    """
+
     maintenant = timezone.now()
 
     with transaction.atomic():
@@ -1070,6 +1569,7 @@ def set_queue_pause(
             and not etat.en_pause
         ):
             etat.en_pause = True
+
             etat.mise_en_pause_le = (
                 maintenant
             )
@@ -1096,20 +1596,39 @@ def set_queue_pause(
             etat.en_pause,
         )
 
-    notifications = _notifications_file(
-        queue,
-        etat,
-        timezone.now(),
+    notifications = (
+        _notifications_file(
+            queue,
+            etat,
+            timezone.now(),
+        )
     )
 
+    # Notification temps réel + Push
     for notification in notifications:
         send_notification(
-            notification["visitorId"],
-            notification["message"],
+            notification[
+                "visitorId"
+            ],
+            notification[
+                "message"
+            ],
+        )
+
+        send_push_notification(
+            notification[
+                "visitorId"
+            ],
+            notification[
+                "message"
+            ],
         )
 
     return {
-        "queue": queue,
-        "paused": etat.en_pause,
-        "notifications": notifications,
+        "queue":
+            queue,
+        "paused":
+            etat.en_pause,
+        "notifications":
+            notifications,
     }
