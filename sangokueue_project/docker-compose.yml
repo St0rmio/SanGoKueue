@@ -1,0 +1,49 @@
+services:
+  web:
+    build: .
+    container_name: sangokueue_web
+    command: >
+      bash -c "python manage.py migrate &&
+               python manage.py collectstatic --noinput &&
+               daphne -b 0.0.0.0 -p 8000 sangokueue_app.asgi:application"
+
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://:ar3lm4nb8pa0!@redis:6379/0
+      - DATABASE_URL=postgres://sango_user:sango_pass@db:5432/sangokueue_db
+      - POSTGRES_DB=sangokueue_db
+      - POSTGRES_USER=sango_user
+      - POSTGRES_PASSWORD=sango_pass
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+    depends_on:
+      - redis
+      - db
+
+  redis:
+    image: redis:alpine
+    container_name: sangokueue_redis
+    command: redis-server --requirepass "ar3lm4nb8pa0!"
+    ports:
+      - "6379:6379"
+
+  db:
+    image: postgres:15-alpine
+    container_name: sangokueue_postgres
+    environment:
+      - POSTGRES_DB=sangokueue_db
+      - POSTGRES_USER=sango_user
+      - POSTGRES_PASSWORD=sango_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+# Volume persistant pour la base de données
+volumes:
+  postgres_data:

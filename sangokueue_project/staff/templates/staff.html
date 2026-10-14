@@ -9,7 +9,10 @@
         <h1 class="h3 mb-1">Gestion des files</h1>
         <p class="text-muted mb-0">Connecté en tant que {{ user.username }}</p>
     </div>
-    <a class="btn btn-outline-secondary" href="{% url 'staff:logout' %}">Se déconnecter</a>
+
+    <a class="btn btn-outline-secondary ms-3" href="{% url 'staff:logout' %}">
+        Se déconnecter
+    </a>
 </div>
 
 {% if messages %}
@@ -21,5 +24,9 @@
 {% endif %}
 
 {% include "staff_board.html" %}
+
+{% include "staff_scan.html" %}
+
+<div hx-get="{% url 'staff:attraction_board' %}" hx-trigger="load, every 2s"></div>
 
 {% endblock %}

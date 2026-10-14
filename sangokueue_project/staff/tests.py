@@ -40,6 +40,8 @@ class StaffInterfaceTests(TestCase):
         self.assertRedirects(response, "/staff/login?next=/staff/")
 
     def test_lists_waiting_visitors_in_call_order(self):
+        EtatFile.objects.create(nom_file=self.queue, en_pause=True)
+        queues.pause_queue(self.queue, True)
         self._join("H1", first="Krilin", last="Brief")
         self._join(
             "SS1",
@@ -60,6 +62,8 @@ class StaffInterfaceTests(TestCase):
         self.assertContains(response, 'hx-trigger="every 2s"')
 
     def test_board_updates_as_visitors_join(self):
+        EtatFile.objects.create(nom_file=self.queue, en_pause=True)
+        queues.pause_queue(self.queue, True)
         self._join("H1", first="Krilin", last="Brief")
 
         first = self.client.get("/staff/?queue=kamehouse", HTTP_HX_REQUEST="true")
@@ -79,6 +83,23 @@ class StaffInterfaceTests(TestCase):
         html = second.content.decode()
         self.assertLess(html.index("Vegeta Prince"), html.index("Krilin Brief"))
         self.assertContains(second, "2 visiteur(s)")
+
+    def test_board_appelle_selon_places_libres(self):
+        self._join("H1", first="Krilin", last="Brief")
+        self._join(
+            "SS1",
+            priority=Billet.Priorite.SUPER_SAIYAN,
+            first="Vegeta",
+            last="Prince",
+        )
+
+        response = self.client.get("/staff/?queue=kamehouse")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Appelé")
+        self.assertTrue(EnFile.objects.get(numero_de_billet_id="SS1").appele)
+        self.assertTrue(EnFile.objects.get(numero_de_billet_id="H1").appele)
+        self.assertContains(response, "Places libres")
 
     def test_pause_and_resume(self):
         self._join("H1")

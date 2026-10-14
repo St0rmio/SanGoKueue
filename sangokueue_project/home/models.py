@@ -29,6 +29,10 @@ class EnFile(models.Model):
     date_appel = models.DateTimeField(null=True, blank=True)
     secondes_pause = models.PositiveIntegerField(default=0)
     secondes_pause_appel = models.PositiveIntegerField(default=0)
+    notification_10min_envoyee = models.BooleanField(default=False)
+    notification_5min_envoyee = models.BooleanField(default=False)
+    notification_prochain_envoyee = models.BooleanField(default=False)
+    notification_appel_envoyee = models.BooleanField(default=False)
 
     class Meta:
         constraints = [
@@ -46,18 +50,12 @@ class EtatFile(models.Model):
 
 
 class VisiteurEnAttraction(models.Model):
-    billet = models.OneToOneField(
-        'EnFile',
-        on_delete=models.CASCADE
-    )
+    billet = models.OneToOneField('Billet', on_delete=models.CASCADE) 
     heure_entree = models.DateTimeField(default=timezone.now)
     heure_sortie_prevue = models.DateTimeField()
 
     def __str__(self):
-        return (
-            f"Billet {self.billet.numero_de_billet_id} - "
-            f"Sortie à {self.heure_sortie_prevue.strftime('%H:%M:%S')}"
-        )
+        return f"Billet {self.billet.numero_de_billet} - Sortie à {self.heure_sortie_prevue.strftime('%H:%M:%S')}"
 
 
 class PushSubscription(models.Model):

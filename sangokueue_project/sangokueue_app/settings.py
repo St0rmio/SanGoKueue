@@ -36,6 +36,10 @@ def split_csv(value):
 ENV = os.environ.get("ENVIRONMENT", "development")
 IS_PRODUCTION = ENV == "production"
 
+# Variables de .env en production
+REDIS_HOST = os.environ.get('REDIS_HOST', '127.0.0.1')
+REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD', 'ar3lm4nb8pa0!')
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
@@ -148,27 +152,31 @@ def postgres_from_url(url):
     )
 
 
-if IS_PRODUCTION:
-    database_url = os.environ.get("DATABASE_URL")
-    if database_url:
-        DATABASES = {"default": postgres_from_url(database_url)}
-    else:
-        DATABASES = {
-            "default": postgres_config(
-                os.environ.get("DB_HOST", "localhost"),
-                os.environ.get("DB_NAME", "sangokueue"),
-                os.environ.get("DB_USER", "sangokueue_user"),
-                os.environ["DB_PASSWORD"],
-                os.environ.get("DB_PORT", "5432"),
-            )
-        }
+database_url = os.environ.get("DATABASE_URL")
+
+if database_url:
+    # Utilisé par Docker en local et potentiellement en production
+    DATABASES = {"default": postgres_from_url(database_url)}
+elif IS_PRODUCTION:
+    # Sécurité pour la production si les variables sont passées séparément
+    DATABASES = {
+        "default": postgres_config(
+            os.environ.get("DB_HOST", "db"),
+            os.environ.get("DB_NAME", "sangokueue"),
+            os.environ.get("DB_USER", "sangokueue_user"),
+            os.environ["DB_PASSWORD"],
+            os.environ.get("DB_PORT", "5432"),
+        )
+    }
 else:
+    # Utilisé si projet lancé sur PC sans Docker (SQLite)
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": BASE_DIR / "db.sqlite3", 
         }
     }
+
 
 if "test" in sys.argv:
     DATABASES = {
@@ -235,7 +243,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Europe/Paris'
 
 USE_I18N = True
 
@@ -270,3 +278,5 @@ VAPID_PUBLIC_KEY = "BEDGxBQUKEQ-3W-I2Mry4ZjSvjkthKtnPeUULPMIBIf8CyZTiuR0tw4FSrVV
 VAPID_CLAIMS = {
     "sub": "mailto:adelemmop@gmail.com"
 }
+
+
