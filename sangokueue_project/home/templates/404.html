@@ -1,28 +1,186 @@
-{% extends 'base.html' %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SanGoKueue - Page introuvable</title>
 
-{% block title %}Erreur 404{% endblock %}
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">
 
-{% block main %}
+    <style>
+        @keyframes flotte { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        @keyframes rotation { to { transform: rotate(360deg); } }
+        @keyframes remplissage { 0% { width: 4%; } 60% { width: 78%; } 100% { width: 96%; } }
 
-<body class="bg-light">
-    <div class="container mt-5">
-        <div class="row justify-content-center">
-            <div class="col-12 col-md-6 col-lg-4">
-                
-                <div class="card shadow-sm">
-                    <div class="card-body p-4">
-                        <h2 class="text-center mb-4">Erreur 404</h2>
-                        
-                        <p>Page non trouvée</p>
+        body { background: #f8f9fa; }
 
-                        <a href={% url 'home:home' %}>Revenir à la page principale</a>
-                        
-                    </div>
+        .bandeau {
+            background: #f19820;
+            padding: 1rem;
+            text-align: center;
+            font-family: 'Bangers', Impact, cursive;
+            font-size: 2.2rem;
+            letter-spacing: 2px;
+            color: #ed0805;
+            text-shadow: 2px 2px 0 #FFD700, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, .15);
+        }
+
+        .erreur { width: 100%; max-width: 520px; margin: 0 auto; text-align: center; }
+
+        .erreur-carte {
+            position: relative;
+            overflow: hidden;
+            padding: 1.5rem 1.25rem 2rem;
+            background: linear-gradient(180deg, #fffdf6 0%, #ffeccb 100%);
+            border: 4px solid #f19820;
+            border-radius: 28px;
+            box-shadow: 0 8px 0 #c97400, 0 14px 30px rgba(0, 0, 0, .2);
+        }
+
+        .erreur-code {
+            position: relative;
+            isolation: isolate;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: .4rem;
+            margin-bottom: .5rem;
+            font-family: 'Bangers', Impact, cursive;
+            font-size: clamp(4.5rem, 20vw, 7.5rem);
+            line-height: 1;
+            letter-spacing: 3px;
+            color: #ed0805;
+            text-shadow: 3px 3px 0 #FFD700, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+        }
+
+        .erreur-code::before {
+            content: "";
+            position: absolute;
+            inset: -90% -40%;
+            z-index: -1;
+            background: repeating-conic-gradient(from 0deg, rgba(255, 200, 0, .30) 0 8deg, transparent 8deg 20deg);
+            -webkit-mask-image: radial-gradient(circle, #000 0, transparent 62%);
+                    mask-image: radial-gradient(circle, #000 0, transparent 62%);
+            animation: rotation 40s linear infinite;
+        }
+
+        .boule {
+            --taille: clamp(4.2rem, 18vw, 6.5rem);
+            position: relative;
+            display: grid;
+            place-items: center;
+            width: var(--taille);
+            height: var(--taille);
+            border-radius: 50%;
+            background: radial-gradient(circle at 32% 28%, #fffbd0 0, #ffd24a 18%, #ffa012 45%, #e46a00 75%, #a84300 100%);
+            box-shadow: inset -6px -8px 14px rgba(120, 40, 0, .45), 0 0 22px rgba(255, 170, 0, .65), 0 6px 14px rgba(0, 0, 0, .25);
+            animation: flotte 3s ease-in-out infinite;
+            flex-shrink: 0;
+        }
+
+        .boule::after {
+            content: "";
+            position: absolute;
+            top: 11%;
+            left: 20%;
+            width: 26%;
+            height: 15%;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, .6);
+            transform: rotate(-30deg);
+            filter: blur(2px);
+        }
+
+        .boule + .boule { animation-delay: -1.5s; }
+
+        .etoiles {
+            display: grid;
+            grid-template-columns: repeat(var(--cols, 2), auto);
+            gap: .05rem .15rem;
+            font-family: Arial, sans-serif;
+            font-size: calc(var(--taille) * .2);
+            line-height: 1;
+            color: #d10000;
+        }
+
+        .erreur-titre {
+            margin: .5rem 0;
+            font-family: 'Bangers', Impact, cursive;
+            font-size: clamp(1.8rem, 6vw, 2.4rem);
+            letter-spacing: 2px;
+            color: #1a1a1a;
+            text-shadow: 2px 2px 0 #FFD700;
+        }
+
+        .erreur-message { margin: 0 auto 1.25rem; max-width: 380px; color: #5a4a36; }
+
+        .reparation {
+            max-width: 340px;
+            margin: 0 auto 1.5rem;
+            font-family: "Courier New", monospace;
+            font-size: .85rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: #1d8a5c;
+        }
+
+        .reparation .barre {
+            height: 16px;
+            margin-top: .4rem;
+            overflow: hidden;
+            background: #06251a;
+            border: 2px solid #1d8a5c;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(46, 230, 140, .4);
+        }
+
+        .reparation .barre span {
+            display: block;
+            height: 100%;
+            background: linear-gradient(90deg, #2fd48a, #b6ffd9);
+            animation: remplissage 6s ease-in-out infinite alternate;
+        }
+
+        .btn-dbz { background: #FF7F00; border-color: #E67300; color: #fff; font-weight: bold; }
+        .btn-dbz:hover { background: #E67300; color: #fff; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .boule, .erreur-code::before, .reparation .barre span { animation: none; }
+            .reparation .barre span { width: 70%; }
+        }
+    </style>
+</head>
+<body class="d-flex flex-column min-vh-100">
+
+    <header class="bandeau">SanGoKueue</header>
+
+    <main class="container flex-grow-1 d-flex align-items-center justify-content-center py-4">
+        <section class="erreur">
+            <div class="erreur-carte">
+
+                <div class="erreur-code" aria-hidden="true">
+                    <span>4</span>
+                    <span class="boule" style="--cols: 2;"><span class="etoiles">★★★★</span></span>
+                    <span>4</span>
                 </div>
-                
-            </div>
-        </div>
-    </div>
-</body>
 
-{% endblock %}
+                <div class="reparation" role="img" aria-label="Recherche de la page demandée">
+                    Recherche de la page en cours...
+                    <div class="barre"><span></span></div>
+                </div>
+
+                <h1 class="erreur-titre">Page introuvable !</h1>
+                <p class="erreur-message">
+                    Même le Dragon Radar ne trouve pas cette page. Elle n’existe pas ou a été déplacée. Vérifie l’adresse ou retourne à l’accueil pour reprendre ta quête.
+                </p>
+
+                <a href="/home/" class="btn btn-dbz btn-lg rounded-pill shadow-sm">Retour à l'accueil</a>
+
+            </div>
+        </section>
+    </main>
+
+</body>
+</html>

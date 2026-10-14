@@ -21,7 +21,7 @@
     {% block extra_head %}{% endblock %}
 </head>
 
-<body class="d-flex flex-column min-vh-100 bg-light">
+<body class="d-flex flex-column min-vh-100 bg-light {% block body_class %}{% endblock %}">
 
     <header class="bg-skyblue py-3 shadow-sm">
         <div class="container d-flex justify-content-center align-items-center">
