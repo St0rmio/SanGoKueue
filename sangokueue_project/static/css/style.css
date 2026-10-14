@@ -91,3 +91,37 @@ body {
     display: flex;
     justify-content: space-between;
 }
+
+
+/* =========================
+   QR CODE SCANNER
+   ========================= */
+
+.qr-scanner-container {
+    width: 100%;
+    /* Ajuste ces valeurs selon la taille de ton image de fond */
+    padding: 55px; 
+    border-radius: 25px;
+    background-image: url("/static/home/images/qr-background.webp");
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+}
+
+.qr-scanner-container #qr-reader {
+    width: 100%;
+    aspect-ratio: 1 / 1; /* Maintient un carré parfait, peu importe la largeur de l'écran */
+    margin: 0 auto;
+    border-radius: 10px;
+    overflow: hidden;
+    background-color: #1a1a1a;
+}
+
+/* Force le flux vidéo de la caméra à remplir le carré sans bandes noires (letterbox) */
+.qr-scanner-container #qr-reader video {
+    object-fit: cover !important;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 10px;
+}
