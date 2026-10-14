@@ -140,4 +140,22 @@ Met en pause ou reprend une file d’attente.
 - Interface gestion staff avec possibilité de mettre en pause la queue, de la vider, de supprimer certains visiteurs de la file d’attente
 
 
+## Lancement avec Docker : 
 
+Dans le dossier `sangokueue_project` :
+```sh
+docker compose up --build
+```
+
+Pour peupler la base de données avec les billets de test
+```sh
+# à exécuter dans un autre terminal pendant que le conteneur tourne
+docker compose exec web python manage.py peupler_billets
+```
+
+Pour se connecter au site local dans son navigateur, aller à l'adresse [localhost:8000](localhost:8000)
+
+Pour nettoyer le conteneur :
+```
+docker compose down -v
+``` 
