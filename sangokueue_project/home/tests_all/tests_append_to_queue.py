@@ -36,6 +36,7 @@ class TestAppendToQueue(TestCase):
                 "queue": self.file if queue is None else queue,
             })
 
+        time.sleep(0.05)
         return self.client.post(
             "/appendToQueue",
             data=brut,
