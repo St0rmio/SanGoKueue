@@ -14,6 +14,9 @@
     <p class="fs-4">Bon amusement dans l'attraction.</p>
   {% elif absent %}
     <h1 class="dbz-title">Tu n'es plus dans la file</h1>
+    {% if exclu %}
+      <p class="fs-4">{{ message_exclusion }}</p>
+    {% endif %}
   {% elif appele %}
     <h1 class="dbz-title">Tu es appelé</h1>
     <p class="fs-4">{{ message_appel }}</p>

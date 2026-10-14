@@ -362,6 +362,7 @@ class TestAppelSelonPlaces(TestCase):
             self.client.get("/visiteur/H2/")
             entree = EnFile.objects.get(numero_de_billet_id="H1")
             entree.appele = True
+            entree.deja_appele = False
             entree.date_appel = debut
             entree.save()
 
@@ -374,7 +375,30 @@ class TestAppelSelonPlaces(TestCase):
         h1 = EnFile.objects.get(numero_de_billet_id="H1")
         h2 = EnFile.objects.get(numero_de_billet_id="H2")
         self.assertFalse(h1.appele)
+        self.assertTrue(h1.deja_appele)
         self.assertGreater(h1.date_entree, h2.date_entree)
+
+    def test_deuxieme_absence_exclut_de_la_file(self):
+        debut = timezone.now()
+        with patch("django.utils.timezone.now", return_value=debut):
+            self._ticket("H1", first="Krilin", last="Brief")
+            self.client.get("/visiteur/H1/")
+            entree = EnFile.objects.get(numero_de_billet_id="H1")
+            entree.appele = True
+            entree.deja_appele = True
+            entree.date_appel = debut
+            entree.save()
+
+        plus_tard = debut + timedelta(seconds=DELAI_PRESENTATION + 1)
+        with patch("django.utils.timezone.now", return_value=plus_tard):
+            response = self.client.get("/visiteur/H1/", HTTP_HX_REQUEST="true")
+
+        self.assertContains(response, "Tu n'es plus dans la file")
+        self.assertContains(response, "Deux absences. Vous quittez la file.")
+        self.assertContains(response, 'data-redirect="/home/"')
+        self.assertFalse(
+            EnFile.objects.filter(numero_de_billet_id="H1").exists()
+        )
 
     def test_validation_staff_dans_les_cinq_minutes(self):
         User.objects.create_user("trunks", password="capsule")

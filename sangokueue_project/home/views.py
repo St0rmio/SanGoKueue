@@ -29,6 +29,9 @@ MESSAGE_APPEL = (
 MESSAGE_RENVOI = (
     "Le délai est dépassé. Vous repartez en fin de file."
 )
+MESSAGE_EXCLUSION = (
+    "Deux absences. Vous quittez la file."
+)
 SEUIL_NOTIFICATION_10_MIN = 10 * 60
 SEUIL_NOTIFICATION_5_MIN = 5 * 60
 
@@ -117,17 +120,29 @@ def _renvoyer_en_fin_de_file(entree, maintenant):
     return ticket_id
 
 
+def _exclure_de_la_file(entree):
+    """Deuxième absence : le visiteur quitte définitivement la file."""
+    ticket_id = entree.numero_de_billet_id
+    queue = entree.nom_file
+    queues.remove_from_queue(queue, ticket_id)
+    entree.delete()
+    send_notification(ticket_id, MESSAGE_EXCLUSION)
+    return ticket_id
+
+
 def expirer_appels(queue=None):
-    """Renvoie en fin de file les appelés non validés dans les 5 min."""
+    """1ère absence → fin de file ; 2ème absence → exclusion."""
     maintenant = timezone.now()
     filtres = {"appele": True}
+    vide = {"renvoyes": set(), "exclus": set()}
     if queue:
         filtres["nom_file"] = queue
         etat = EtatFile.objects.filter(nom_file=queue).first()
         if etat is not None and etat.en_pause:
-            return set()
+            return vide
 
     renvoyes = set()
+    exclus = set()
     with transaction.atomic():
         appeles = list(
             EnFile.objects.select_for_update()
@@ -141,8 +156,11 @@ def expirer_appels(queue=None):
             restant = _secondes_restantes_appel(entree, etat, maintenant)
             if restant != 0:
                 continue
-            renvoyes.add(_renvoyer_en_fin_de_file(entree, maintenant))
-    return renvoyes
+            if entree.deja_appele:
+                exclus.add(_exclure_de_la_file(entree))
+            else:
+                renvoyes.add(_renvoyer_en_fin_de_file(entree, maintenant))
+    return {"renvoyes": renvoyes, "exclus": exclus}
 
 
 def appeler_suivants(queue, nombre=None):
@@ -167,12 +185,10 @@ def appeler_suivants(queue, nombre=None):
         ordre = _ordre_attente(entrees, etat, maintenant)[:a_appeler]
         for suivant in ordre:
             suivant.appele = True
-            suivant.deja_appele = True
             suivant.date_appel = maintenant
             suivant.secondes_pause_appel = 0
             suivant.save(update_fields=[
                 "appele",
-                "deja_appele",
                 "date_appel",
                 "secondes_pause_appel",
             ])
@@ -232,7 +248,7 @@ def valider_entree(numero_billet):
     return True, "Billet valide. Visiteur entré dans l'attraction.", 200
 
 
-def _wait_context(billet, entree, renvoye=False):
+def _wait_context(billet, entree, renvoye=False, exclu=False):
     if VisiteurEnAttraction.objects.filter(billet_id=billet.pk).exists():
         return {
             "billet": billet,
@@ -244,6 +260,8 @@ def _wait_context(billet, entree, renvoye=False):
             "billet": billet,
             "expire": billet.date < timezone.localdate(),
             "absent": True,
+            "exclu": exclu,
+            "message_exclusion": MESSAGE_EXCLUSION if exclu else None,
         }
 
     if entree.appele:
@@ -327,20 +345,23 @@ def visitor(request, numero=None):
 
         entree = None
         renvoye = False
+        exclu = False
 
     elif refreshing:
-        renvoyes = expirer_appels(QUEUE_NAME)
+        resultat = expirer_appels(QUEUE_NAME)
         entree = EnFile.objects.filter(
             numero_de_billet=billet,
             nom_file=QUEUE_NAME,
         ).first()
-        renvoye = billet.pk in renvoyes
+        renvoye = billet.pk in resultat["renvoyes"]
+        exclu = billet.pk in resultat["exclus"]
 
     else:
         entree = _join_queue(billet)
         renvoye = False
+        exclu = False
 
-    context = _wait_context(billet, entree, renvoye)
+    context = _wait_context(billet, entree, renvoye, exclu)
 
     if request.method == "POST":
         context["quitte"] = True
