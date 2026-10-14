@@ -1,3 +1,7 @@
+import json
+import uuid 
+import time 
+
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -46,21 +50,31 @@ __all__ = [
 
 class AffluenceAttractionTests(TestCase):
     def setUp(self):
+        # 1. Création des billets parents requis par le modèle
+        b1 = Billet.objects.create(numero_de_billet="B1", date=date.today(), prenom="Jean", nom="A")
+        b2 = Billet.objects.create(numero_de_billet="B2", date=date.today(), prenom="Marie", nom="B")
+        b3 = Billet.objects.create(numero_de_billet="B3", date=date.today(), prenom="Luc", nom="C")
+        
+        # 2. Création des entrées dans la file (appele=False remplace statut="en_attente")
+        self.billet_1 = EnFile.objects.create(numero_de_billet=b1, nom_file="Attraction 33", appele=False)
+        self.billet_2 = EnFile.objects.create(numero_de_billet=b2, nom_file="Attraction 33", appele=False)
+        self.billet_3 = EnFile.objects.create(numero_de_billet=b3, nom_file="Attraction 33", appele=False)
+        
+        # URL fictive pour le scan (à adapter selon ton urls.py, ici on utilise la PK de EnFile)
+        self.url_scan = reverse('staff:scan_billet')
+
+        # 3. Création et connexion d'un compte Staff pour les tests
+        self.staff_user = User.objects.create_superuser('staff_test', 'staff@test.com', 'password')
         queues._client = _FakeRedis()
         self.notification = patch("home.views.send_notification")
         self.notification.start()
         self.push = patch("home.views.send_push_notification")
         self.push.start()
 
-        b1 = Billet.objects.create(
-            numero_de_billet="B1", date=date.today(), prenom="Jean", nom="A"
-        )
-        b2 = Billet.objects.create(
-            numero_de_billet="B2", date=date.today(), prenom="Marie", nom="B"
-        )
-        b3 = Billet.objects.create(
-            numero_de_billet="B3", date=date.today(), prenom="Luc", nom="C"
-        )
+        b1 = Billet.objects.create(numero_de_billet=uuid.uuid4(), date=date.today(), prenom="Jean", nom="A")
+        b2 = Billet.objects.create(numero_de_billet=uuid.uuid4(), date=date.today(), prenom="Marie", nom="B")
+        b3 = Billet.objects.create(numero_de_billet=uuid.uuid4(), date=date.today(), prenom="Luc", nom="C")
+
         self.billet_1 = EnFile.objects.create(
             numero_de_billet=b1, nom_file="attraction", appele=False
         )
@@ -71,11 +85,13 @@ class AffluenceAttractionTests(TestCase):
             numero_de_billet=b3, nom_file="attraction", appele=False
         )
         queues.append_to_queue("attraction", "B1", Billet.Priorite.HUMAN)
+        time.sleep(0.05)
         queues.append_to_queue("attraction", "B2", Billet.Priorite.HUMAN)
+        time.sleep(0.05) 
         queues.append_to_queue("attraction", "B3", Billet.Priorite.HUMAN)
         self.url_scan = reverse("staff:scan_billet")
         self.staff_user = User.objects.create_superuser(
-            "staff_test", "staff@test.com", "password"
+            str(uuid.uuid4()), "staff@test.com", "password"
         )
         self.client.force_login(self.staff_user)
 
@@ -106,13 +122,23 @@ class AffluenceAttractionTests(TestCase):
     def test_scan_billet_capacite_max(self):
         for i in range(CAPACITE_MAX):
             b = Billet.objects.create(
-                numero_de_billet=f"X{i}", date=date.today(), prenom="X", nom="Y"
+                numero_de_billet=uuid.uuid4(), date=date.today(), prenom="X", nom="Y"
             )
             VisiteurEnAttraction.objects.create(
                 billet=b,
                 heure_entree=timezone.now(),
                 heure_sortie_prevue=timezone.now() + timedelta(minutes=1),
             )
+            
+        # Tenter de scanner un 51ème billet (le self.billet_1)
+        url_scan_51 = reverse('staff:scan_billet')
+        response = self.client.post(
+            url_scan_51,
+            data=json.dumps({'numero_billet': str(self.billet_1.numero_de_billet_id)}),
+            content_type='application/json'
+        )
+        
+        # Vérifier le rejet (HTTP 400 Bad Request)
 
         response = self.client.post(
             self.url_scan,

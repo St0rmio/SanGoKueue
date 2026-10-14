@@ -31,3 +31,9 @@
     background-color: #E67300;
     color: white;
 }
+
+#qr-reader video {
+    object-fit: cover !important;
+    width: 100% !important;
+    height: 100% !important;
+}

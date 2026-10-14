@@ -425,14 +425,51 @@ def remove_view(request):
 @login_required
 @require_POST
 def staff_scan_billet(request):
-    try:
-        data = json.loads(request.body.decode() or "{}")
-        numero_billet = (data.get("numero_billet") or "").strip()
-    except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
-        return JsonResponse({
-            "status": "error",
-            "message": "Requête invalide.",
-        }, status=400)
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            numero_billet = data.get('numero_billet')
+            
+            # 0. Vérification de la capacité maximale (50)
+            if VisiteurEnAttraction.objects.count() >= 50:
+                return JsonResponse({
+                    'status': 'error', 
+                    'message': "L'attraction est pleine (50 visiteurs maximum)."
+                }, status=400) # Ajout du statut HTTP 400
+
+            # 1. Vérifier s'il est déjà dans l'attraction
+            if VisiteurEnAttraction.objects.filter(billet_id=numero_billet).exists():
+                return JsonResponse({
+                    'status': 'error', 
+                    'message': "Ce visiteur est déjà dans l'attraction !"
+                }, status=400)
+            
+            # 2. Récupérer le billet dans la file d'attente
+            en_file = EnFile.objects.get(numero_de_billet_id=numero_billet)
+            
+            # 3. Succès : Création dans l'attraction
+            duree_secondes = random.randint(30, 90)
+            heure_sortie = timezone.now() + timedelta(seconds=duree_secondes)
+            
+            VisiteurEnAttraction.objects.create(
+                billet=en_file.numero_de_billet, # On passe l'objet Billet directement
+                heure_sortie_prevue=heure_sortie
+            )
+            
+            # 4. On le supprime définitivement de la file
+            en_file.delete()
+            
+            return JsonResponse({
+                'status': 'success', 
+                'message': "Billet valide. Visiteur entré dans l'attraction."
+            })
+            
+        except EnFile.DoesNotExist:
+            return JsonResponse({
+                'status': 'error', 
+                'message': "Billet invalide ou non présent dans la file d'attente."
+            }, status=400)
+        
 
     if not numero_billet:
         return JsonResponse({

@@ -1,4 +1,5 @@
 import json
+import time
 from datetime import timedelta
 
 from django.test import TestCase
@@ -35,6 +36,7 @@ class TestAppendToQueue(TestCase):
                 "queue": self.file if queue is None else queue,
             })
 
+        time.sleep(0.05)
         return self.client.post(
             "/appendToQueue",
             data=brut,
@@ -187,7 +189,8 @@ class TestAppendToQueue(TestCase):
             response.status_code,
             201,
         )
-
+        
+        time.sleep(0.05)
         self.assertEqual(
             response.json()["position"],
             2,
