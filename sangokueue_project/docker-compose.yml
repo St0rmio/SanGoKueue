@@ -11,8 +11,6 @@ services:
 
     volumes:
       - .:/app
-    ports:
-      - "8000:8000"
     env_file:
       - .env
     environment:
@@ -63,6 +61,17 @@ services:
       retries: 10
     ports:
       - "5432:5432"
+
+  proxy:
+    image: nginx:latest
+    container_name: sangokueue_proxy
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      web:
+        condition: service_healthy
 
 # Volume persistant pour la base de données
 volumes:
