@@ -1,10 +1,20 @@
-# .dockerignore
-env/
-venv/
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-db.sqlite3
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Local environment and secrets
 .env
+.env.*
+!.env.example
+*.pem
+env/
+
+# Local data and generated files
+.git/
 .DS_Store
+db.sqlite3
+staticfiles/
+media/

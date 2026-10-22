@@ -14,8 +14,16 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+
+from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
+from django.views.defaults import (
+    bad_request,
+    page_not_found,
+    permission_denied,
+    server_error,
+)
 from django.views.generic import RedirectView
 
 from home import views as home_views
@@ -36,5 +44,13 @@ urlpatterns = [
     path("home/", include("home.urls")),
     path("staff/", include("staff.urls")),
     path("", RedirectView.as_view(url="home/", permanent=True)),
-    
 ]
+
+# Prévisualisation des pages d'erreur, uniquement en développement (DEBUG=True)
+if settings.DEBUG:
+    urlpatterns += [
+        path("erreur/400/", bad_request, {"exception": Exception()}),
+        path("erreur/403/", permission_denied, {"exception": Exception()}),
+        path("erreur/404/", page_not_found, {"exception": Exception()}),
+        path("erreur/500/", server_error),
+    ]

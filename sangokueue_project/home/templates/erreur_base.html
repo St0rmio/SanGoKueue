@@ -1,0 +1,51 @@
+```django
+{% extends 'base.html' %}
+{% load static %}
+
+{% block extra_head %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'home/css/erreurs.css' %}">
+{% endblock %}
+
+{% block main %}
+    <section class="erreur-page">
+        <section class="erreur" aria-labelledby="erreur-titre">
+            <div class="erreur-carte">
+
+                <div class="erreur-code {% block classe_code %}{% endblock %}" aria-hidden="true">
+                    {% block visuel_code %}{% endblock %}
+                </div>
+
+                <div class="reparation" role="img"
+                     aria-label="Animation décorative de récupération d'énergie">
+                    <div class="reparation-label">
+                        {% block animation_label %}Énergie en cours de récupération...{% endblock %}
+                    </div>
+                    <div class="barre"><span></span></div>
+                </div>
+
+                {% block illustration %}{% endblock %}
+
+                <h2 id="erreur-titre" class="erreur-titre">
+                    {% block titre %}{% endblock %}
+                </h2>
+
+                <p class="erreur-message">
+                    {% block message %}{% endblock %}
+                </p>
+
+                <div class="erreur-actions">
+                    {% block actions %}
+                        <a href="{% url 'home:home' %}"
+                           class="btn btn-dbz btn-lg rounded-pill">
+                            <i class="bi bi-house-fill me-1" aria-hidden="true"></i>
+                            Retour à l'accueil
+                        </a>
+                    {% endblock %}
+                </div>
+
+            </div>
+        </section>
+    </section>
+{% endblock %}
+```
