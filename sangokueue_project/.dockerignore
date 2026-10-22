@@ -10,6 +10,7 @@ venv/
 .env.*
 !.env.example
 *.pem
+env/
 
 # Local data and generated files
 .git/

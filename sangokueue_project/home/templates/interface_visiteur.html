@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Mon espace – SanGoKueue{% endblock %}
+{% block title %}SanGoKueue - File d'attente{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -29,6 +29,10 @@
   </form>
 </div>
 {% else %}
+
+<div class="visiteur-gif-left"></div>
+<div class="visiteur-gif-right"></div>
+
 <div class="container py-4">
 
   {% if not expire and not absent and not appele %}

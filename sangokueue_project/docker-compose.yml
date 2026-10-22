@@ -1,20 +1,78 @@
 services:
   web:
     build: .
-    ports:
-      - "8000:8000"
-    environment:
-      REDIS_URL: redis://redis:6379/0
+    image: sangokueue_web:${SANGOKUEUE_TAG:-dev}
+    container_name: sangokueue_web
+    command: >
+      bash -c "python manage.py migrate &&
+               python manage.py peupler_billets &&
+               python manage.py collectstatic --noinput &&
+               daphne -b 0.0.0.0 -p 8000 sangokueue_app.asgi:application"
+
     volumes:
       - .:/app
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://:ar3lm4nb8pa0!@redis:6379/0
+      - DATABASE_URL=postgres://sango_user:sango_pass@db:5432/sangokueue_db
+      - POSTGRES_DB=sangokueue_db
+      - POSTGRES_USER=sango_user
+      - POSTGRES_PASSWORD=sango_pass
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
     depends_on:
       redis:
         condition: service_healthy
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
 
   redis:
-    image: redis:alpine
+    image: redis:8-alpine
+    container_name: sangokueue_redis
+    command: redis-server --requirepass "ar3lm4nb8pa0!"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a 'ar3lm4nb8pa0!' --no-auth-warning ping | grep -q PONG"]
       interval: 5s
       timeout: 3s
       retries: 10
+    ports:
+      - "6379:6379"
+
+  db:
+    image: postgres:15-alpine
+    container_name: sangokueue_postgres
+    environment:
+      - POSTGRES_DB=sangokueue_db
+      - POSTGRES_USER=sango_user
+      - POSTGRES_PASSWORD=sango_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "sango_user", "-d", "sangokueue_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  proxy:
+    image: nginx:1.30.6
+    container_name: sangokueue_proxy
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      web:
+        condition: service_healthy
+
+# Volume persistant pour la base de données
+volumes:
+  postgres_data:

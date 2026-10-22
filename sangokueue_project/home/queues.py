@@ -8,7 +8,7 @@ from home.models import Billet
 _client = None
 
 SAIYAN_PRIORITY_WAIT_SECONDS = 25 * 60
-CALLED_WAIT_SECONDS = 10 * 60
+CALLED_WAIT_SECONDS = 5 * 60
 
 _LANES = {
     Billet.Priorite.HUMAN: "human",
@@ -107,8 +107,13 @@ def append_to_queue(queue: str, ticket_id: str, priorite: int) -> None:
     get_redis().zadd(_lane_key(queue, lane), {ticket_id: time.time()})
 
 
+def remember_called(queue: str, ticket_id: str) -> None:
+    """Place le visiteur en attente de validation (5 min)."""
+    _mark_called(get_redis(), queue, ticket_id)
+
+
 def pop_from_queue(queue: str) -> str | None:
-    """Appelle le prochain visiteur et le place en file d'attente de validation (10 min)."""
+    """Appelle le prochain visiteur et le place en file d'attente de validation (5 min)."""
     client = get_redis()
     if client.exists(_paused_key(queue)):
         return None
@@ -123,7 +128,7 @@ def pop_from_queue(queue: str) -> str | None:
 
 
 def validate_entry(queue: str, ticket_id: str) -> bool:
-    """Le visiteur se présente à l'entrée. False s'il a dépassé les 10 min."""
+    """Le visiteur se présente à l'entrée. False s'il a dépassé les 5 min."""
     client = get_redis()
     with client.lock(_lock_key(queue), timeout=5, blocking_timeout=5):
         _expire_called(client, queue)
@@ -132,7 +137,7 @@ def validate_entry(queue: str, ticket_id: str) -> bool:
 
 
 def expire_called(queue: str) -> list[str]:
-    """Retire les visiteurs appelés qui n'ont pas validé dans les 10 min."""
+    """Retire les visiteurs appelés qui n'ont pas validé dans les 5 min."""
     client = get_redis()
     with client.lock(_lock_key(queue), timeout=5, blocking_timeout=5):
         return _expire_called(client, queue)
