@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+
+# Local data and generated files
+.git/
+.DS_Store
+db.sqlite3
+staticfiles/
+media/
