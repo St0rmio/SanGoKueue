@@ -63,7 +63,7 @@ services:
       - "5432:5432"
 
   proxy:
-    image: nginx:latest
+    image: nginx:1.30.6
     container_name: sangokueue_proxy
     ports:
       - "80:80"
