@@ -4,6 +4,7 @@ metadata:
   name: db
   namespace: {{ .Release.Namespace }}
 spec:
+  clusterIP: None
   selector:
     app: postgres
   ports:

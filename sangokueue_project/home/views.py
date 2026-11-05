@@ -43,6 +43,13 @@ def home(request):
     )
 
 
+def a_propos(request):
+    return render(
+        request,
+        "a_propos.html",
+    )
+
+
 def service_worker(request):
     return render(
         request,

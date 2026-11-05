@@ -1,9 +1,10 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: postgres
   namespace: {{ .Release.Namespace }}
 spec:
+  serviceName: db
   replicas: {{ .Values.postgres.replicaCount }}
   selector:
     matchLabels:
@@ -13,6 +14,8 @@ spec:
       labels:
         app: postgres
     spec:
+      securityContext:
+        fsGroup: 999
       containers:
       - name: postgres
         image: {{ .Values.postgres.image }}
@@ -34,6 +37,11 @@ spec:
             secretKeyRef:
               name: {{ .Values.secretName }}
               key: POSTGRES_PASSWORD
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
         resources:
           requests:
             cpu: {{ .Values.resources.requests.cpu | quote }}
@@ -41,3 +49,12 @@ spec:
           limits:
             cpu: {{ .Values.resources.limits.cpu | quote }}
             memory: {{ .Values.resources.limits.memory | quote }}
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: {{ .Values.postgres.storage }}
