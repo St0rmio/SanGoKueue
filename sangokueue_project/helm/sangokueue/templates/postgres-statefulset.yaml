@@ -21,6 +21,16 @@ spec:
         image: {{ .Values.postgres.image }}
         ports:
         - containerPort: 5432
+        livenessProbe:
+          exec:
+            command:
+              - sh
+              - -c
+              - 'pg_isready -h 127.0.0.1 -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t 2'
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
         env:
         - name: POSTGRES_DB
           valueFrom:
