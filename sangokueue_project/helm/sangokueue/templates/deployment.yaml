@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sangokueue
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: sangokueue
+  template:
+    metadata:
+      labels:
+        app: sangokueue
+    spec:
+      containers:
+      - name: sangokueue
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: sangokueue-config
+        env:
+        - name: ENVIRONMENT
+          value: production
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.secretName }}
+              key: SECRET_KEY
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.secretName }}
+              key: POSTGRES_PASSWORD
+        - name: ALLOWED_HOSTS
+          value: {{ .Values.allowedHosts | quote }}
+        - name: CSRF_TRUSTED_ORIGINS
+          value: {{ .Values.csrfTrustedOrigins | quote }}
+        resources:
+          requests:
+            cpu: {{ .Values.resources.requests.cpu | quote }}
+            memory: {{ .Values.resources.requests.memory | quote }}
+          limits:
+            cpu: {{ .Values.resources.limits.cpu | quote }}
+            memory: {{ .Values.resources.limits.memory | quote }}

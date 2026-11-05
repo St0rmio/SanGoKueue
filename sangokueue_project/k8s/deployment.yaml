@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sangokueue
+  namespace: n-grp3
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: sangokueue
+  template:
+    metadata:
+      labels:
+        app: sangokueue
+    spec:
+      containers:
+      - name: sangokueue
+        image: rabahnini2004/sangokueue:v1
+        ports:
+        - containerPort: 8000
+        env:
+        - name: ENVIRONMENT
+          value: production
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sangokueue-secrets
+              key: SECRET_KEY
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: sangokueue-secrets
+              key: DATABASE_URL
+        - name: ALLOWED_HOSTS
+          value: django.grp3.csc8567.luxbulb.org,net4255.luxbulb.org,127.0.0.1,localhost
+        - name: CSRF_TRUSTED_ORIGINS
+          value: https://django.grp3.csc8567.luxbulb.org,https://net4255.luxbulb.org,http://127.0.0.1:8001
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "100Mi"
+          limits:
+            cpu: "200m"
+            memory: "200Mi"

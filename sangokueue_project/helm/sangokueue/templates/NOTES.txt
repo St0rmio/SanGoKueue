@@ -1,0 +1,6 @@
+Charte installée dans {{ .Release.Namespace }}.
+
+Le site lit DB_HOST, DB_PORT, DB_NAME et DB_USER depuis le ConfigMap sangokueue-config.
+Le mot de passe reste dans le Secret {{ .Values.secretName }}.
+
+Hôte Ingress : {{ .Values.ingress.host }}
