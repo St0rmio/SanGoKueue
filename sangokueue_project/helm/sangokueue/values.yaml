@@ -41,3 +41,6 @@ autoscaling:
   minReplicas: 3
   maxReplicas: 10
   targetCPUUtilizationPercentage: 60
+
+  networkPolicy:
+  enabled: false
