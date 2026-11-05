@@ -9,6 +9,10 @@ postgres:
   replicaCount: 1
   storage: 100Mi
 
+redis:
+  image: redis:8-alpine
+  url: redis://redis:6379/0
+
 database:
   host: db
   port: "5432"

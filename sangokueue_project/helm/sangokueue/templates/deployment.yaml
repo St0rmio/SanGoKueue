@@ -39,6 +39,11 @@ spec:
             secretKeyRef:
               name: {{ .Values.secretName }}
               key: POSTGRES_PASSWORD
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: sangokueue-config
+              key: REDIS_URL
         - name: ALLOWED_HOSTS
           value: {{ .Values.allowedHosts | quote }}
         - name: CSRF_TRUSTED_ORIGINS

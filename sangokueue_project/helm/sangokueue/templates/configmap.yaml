@@ -8,3 +8,4 @@ data:
   DB_PORT: {{ .Values.database.port | quote }}
   DB_NAME: {{ .Values.database.name | quote }}
   DB_USER: {{ .Values.database.user | quote }}
+  REDIS_URL: {{ .Values.redis.url | quote }}
