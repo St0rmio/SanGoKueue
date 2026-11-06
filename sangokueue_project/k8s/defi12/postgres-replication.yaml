@@ -1,0 +1,360 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: defi12-postgres-replication
+  namespace: n-grp3
+data:
+  start-primary.sh: |
+    #!/bin/sh
+    set -eu
+
+    RULE="host replication ${POSTGRES_USER} all scram-sha-256"
+
+    # Base d??j?? existante : rendre la r??gle de r??plication persistante
+    # avant le d??marrage de PostgreSQL.
+    if [ -f "$PGDATA/pg_hba.conf" ] && ! grep -Fqx "$RULE" "$PGDATA/pg_hba.conf"; then
+      printf '\n%s\n' "$RULE" >> "$PGDATA/pg_hba.conf"
+    fi
+
+    exec docker-entrypoint.sh postgres \
+      -c wal_level=replica \
+      -c max_wal_senders=10 \
+      -c wal_keep_size=16MB
+
+  01-replication-hba.sh: |
+    #!/bin/sh
+    set -eu
+
+    # Cas d'une base initialis??e pour la premi??re fois : ce script est ex??cut??
+    # par l'image officielle PostgreSQL depuis /docker-entrypoint-initdb.d.
+    RULE="host replication ${POSTGRES_USER} all scram-sha-256"
+
+    if ! grep -Fqx "$RULE" "$PGDATA/pg_hba.conf"; then
+      printf '\n%s\n' "$RULE" >> "$PGDATA/pg_hba.conf"
+    fi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: n-grp3
+spec:
+  serviceName: db
+  replicas: 1
+  podManagementPolicy: OrderedReady
+  revisionHistoryLimit: 10
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+
+  selector:
+    matchLabels:
+      app: postgres
+
+  template:
+    metadata:
+      labels:
+        app: postgres
+
+    spec:
+      securityContext:
+        fsGroup: 999
+
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          imagePullPolicy: IfNotPresent
+
+          command:
+            - /usr/local/bin/start-primary.sh
+
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: sangokueue-config
+                  key: DB_NAME
+
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: sangokueue-config
+                  key: DB_USER
+
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sangokueue-secrets
+                  key: POSTGRES_PASSWORD
+
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -h 127.0.0.1 -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t 2
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 100Mi
+            limits:
+              cpu: 200m
+              memory: 200Mi
+
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+
+            - name: replication-config
+              mountPath: /usr/local/bin/start-primary.sh
+              subPath: start-primary.sh
+              readOnly: true
+
+            - name: replication-config
+              mountPath: /docker-entrypoint-initdb.d/01-replication-hba.sh
+              subPath: 01-replication-hba.sh
+              readOnly: true
+
+      volumes:
+        - name: replication-config
+          configMap:
+            name: defi12-postgres-replication
+            defaultMode: 365
+
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
+
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        volumeMode: Filesystem
+        resources:
+          requests:
+            storage: 100Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-replica
+  namespace: n-grp3
+spec:
+  clusterIP: None
+  selector:
+    app: postgres-replica
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-replica
+  namespace: n-grp3
+spec:
+  serviceName: postgres-replica
+  replicas: 1
+  podManagementPolicy: OrderedReady
+  revisionHistoryLimit: 10
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+
+  selector:
+    matchLabels:
+      app: postgres-replica
+
+  template:
+    metadata:
+      labels:
+        app: postgres-replica
+
+    spec:
+      securityContext:
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+
+      initContainers:
+        - name: seed-from-primary
+          image: postgres:15-alpine
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -ec
+          args:
+            - |
+              umask 077
+
+              printf 'db:5432:*:%s:%s\n' "$REPL_USER" "$REPL_PASSWORD" \
+                > /replication-auth/.pgpass
+
+              # Un replica d??j?? initialis?? ne doit pas ??tre ??cras??.
+              if [ -s "$PGDATA/PG_VERSION" ] && [ -f "$PGDATA/standby.signal" ]; then
+                echo "Replica PostgreSQL d??j?? initialis??."
+                exit 0
+              fi
+
+              if [ -e "$PGDATA" ]; then
+                echo "PGDATA existe mais n'est pas un replica valide : arr??t sans ??crasement." >&2
+                exit 1
+              fi
+
+              echo "Attente du Primary SanGoKueue sur db:5432..."
+              attempts=0
+              until pg_isready -h db -p 5432 -U "$REPL_USER" -d "$POSTGRES_DB" -t 2; do
+                attempts=$((attempts + 1))
+                if [ "$attempts" -ge 90 ]; then
+                  echo "Primary indisponible apr??s 180 secondes." >&2
+                  exit 1
+                fi
+                sleep 2
+              done
+
+              echo "Copie initiale de la vraie base SanGoKueue..."
+              stage=$(mktemp -d /var/lib/postgresql/data/seed.XXXXXX)
+              trap 'rm -rf "$stage"' EXIT
+
+              pg_basebackup \
+                --dbname="host=db port=5432 user=$REPL_USER passfile=/replication-auth/.pgpass application_name=postgres-replica" \
+                --pgdata="$stage" \
+                --wal-method=stream \
+                --write-recovery-conf \
+                --no-password \
+                --progress
+
+              mv "$stage" "$PGDATA"
+              trap - EXIT
+
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: sangokueue-config
+                  key: DB_NAME
+
+            - name: REPL_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: sangokueue-config
+                  key: DB_USER
+
+            - name: REPL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sangokueue-secrets
+                  key: POSTGRES_PASSWORD
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 100Mi
+            limits:
+              cpu: 200m
+              memory: 200Mi
+
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+
+            - name: replication-auth
+              mountPath: /replication-auth
+
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          imagePullPolicy: IfNotPresent
+
+          args:
+            - postgres
+            - -c
+            - hot_standby=on
+
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: sangokueue-config
+                  key: DB_USER
+
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: sangokueue-config
+                  key: DB_NAME
+
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -h 127.0.0.1 -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t 2
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 100Mi
+            limits:
+              cpu: 200m
+              memory: 200Mi
+
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+
+            - name: replication-auth
+              mountPath: /replication-auth
+              readOnly: true
+
+      volumes:
+        - name: replication-auth
+          emptyDir: {}
+
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
+
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        volumeMode: Filesystem
+        resources:
+          requests:
+            storage: 100Mi
