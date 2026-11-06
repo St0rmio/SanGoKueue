@@ -20,13 +20,17 @@ spec:
             - -f
             - /mnt/locust/load/locustfile.py
             - --host
-            - {{ printf "https://%s" .Values.ingress.host | quote }}
+            - {{ printf "http://%s:8000" .Values.ingress.host | quote }}
             - --web-host
             - 0.0.0.0
           ports:
             - name: http
               containerPort: 8089
           env:
+            - name: LOCUST_REWRITE_HOST
+              value: {{ .Values.ingress.host | quote }}
+            - name: LOCUST_SERVICE
+              value: sangokueue
             - name: STAFF_USERNAME
               value: {{ .Values.locust.staffUsername | quote }}
             - name: STAFF_PASSWORD

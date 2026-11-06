@@ -14,11 +14,30 @@ import os
 import queue
 import random
 import re
+import socket
 import threading
 import time
+from http.cookiejar import DefaultCookiePolicy
 from pathlib import Path
 
 from locust import HttpUser, between, events, task
+
+# Le cluster marque les cookies Secure. Locust parle en HTTP au service,
+# donc il doit quand même renvoyer ces cookies.
+DefaultCookiePolicy.return_ok_secure = lambda self, cookie, request: True
+DefaultCookiePolicy.set_ok_secure = lambda self, cookie, request: True
+
+_hote_public = os.environ.get("LOCUST_REWRITE_HOST", "")
+_service = os.environ.get("LOCUST_SERVICE", "")
+if _hote_public and _service:
+    _resolution = socket.getaddrinfo
+
+    def _resoudre(hote, port, *args, **kwargs):
+        if hote == _hote_public:
+            hote = _service
+        return _resolution(hote, port, *args, **kwargs)
+
+    socket.getaddrinfo = _resoudre
 
 ICI = Path(__file__).resolve().parent
 PROJET = ICI.parent
