@@ -1,4 +1,5 @@
 import time
+import uuid
 
 import redis
 from django.conf import settings
@@ -39,6 +40,21 @@ def _paused_key(queue: str) -> str:
 
 def _lock_key(queue: str) -> str:
     return f"queue:{queue}:lock"
+
+
+def essayer_verrou(queue: str):
+    """Pose un verrou Redis. None si une autre requête l'a déjà."""
+    jeton = uuid.uuid4().hex
+    cle = _lock_key(queue or "*")
+    if get_redis().set(cle, jeton, nx=True, ex=5):
+        return cle, jeton
+    return None
+
+
+def relacher_verrou(cle: str, jeton: str) -> None:
+    client = get_redis()
+    if client.get(cle) == jeton:
+        client.delete(cle)
 
 
 def _all_lane_keys(queue: str) -> list[str]:

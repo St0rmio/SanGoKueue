@@ -12,6 +12,8 @@ RUN pip install --upgrade pip \
 # Copie du projet dans le conteneur
 COPY . /app/
 
+RUN python manage.py collectstatic --noinput
+
 # Exposition du port 8000
 EXPOSE 8000
 
