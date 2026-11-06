@@ -1,0 +1,278 @@
+/* =========================================================
+   PAGES D'ERREUR - THEME SAN GOKU
+   ========================================================= */
+
+   @keyframes flotte {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-10px); }
+}
+
+@keyframes rotation {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes clignote {
+    0%, 49%  { opacity: 1; }
+    50%, 100% { opacity: 0; }
+}
+
+@keyframes remplissage {
+    0%   { width: 4%; }
+    60%  { width: 78%; }
+    100% { width: 96%; }
+}
+
+/* ---------- Conteneur et carte ---------- */
+
+.erreur {
+    width: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.erreur-carte {
+    position: relative;
+    overflow: hidden;
+    padding: 1.5rem 1.25rem 2rem;
+    background: linear-gradient(180deg, #fffdf6 0%, #ffeccb 100%);
+    border: 4px solid #f19820;
+    border-radius: 28px;
+    box-shadow:
+        0 8px 0 #c97400,
+        0 14px 30px rgba(0, 0, 0, 0.2);
+}
+
+/* ---------- Gros code d'erreur ---------- */
+
+.erreur-code {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    margin-bottom: 0.5rem;
+    font-family: 'Bangers', cursive;
+    font-size: clamp(4.5rem, 20vw, 7.5rem);
+    line-height: 1;
+    letter-spacing: 3px;
+    color: #ed0805;
+    text-shadow:
+        3px 3px 0 #FFD700,
+        -2px -2px 0 #000,
+        2px -2px 0 #000,
+        -2px 2px 0 #000,
+        2px 2px 0 #000;
+}
+
+/* Rayons d'aura qui tournent derrière le code */
+.erreur-code::before {
+    content: "";
+    position: absolute;
+    inset: -90% -40%;
+    z-index: -1;
+    background: repeating-conic-gradient(
+        from 0deg,
+        rgba(255, 200, 0, 0.30) 0 8deg,
+        transparent 8deg 20deg
+    );
+    -webkit-mask-image: radial-gradient(circle, #000 0, transparent 62%);
+            mask-image: radial-gradient(circle, #000 0, transparent 62%);
+    animation: rotation 40s linear infinite;
+}
+
+/* ---------- Boule de cristal ---------- */
+
+.boule {
+    --taille: clamp(4.2rem, 18vw, 6.5rem);
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: var(--taille);
+    height: var(--taille);
+    border-radius: 50%;
+    background: radial-gradient(
+        circle at 32% 28%,
+        #fffbd0 0,
+        #ffd24a 18%,
+        #ffa012 45%,
+        #e46a00 75%,
+        #a84300 100%
+    );
+    box-shadow:
+        inset -6px -8px 14px rgba(120, 40, 0, 0.45),
+        0 0 22px rgba(255, 170, 0, 0.65),
+        0 6px 14px rgba(0, 0, 0, 0.25);
+    animation: flotte 3s ease-in-out infinite;
+}
+
+.boule::after {
+    content: "";
+    position: absolute;
+    top: 11%;
+    left: 20%;
+    width: 26%;
+    height: 15%;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.6);
+    transform: rotate(-30deg);
+    filter: blur(2px);
+}
+
+.boule + .boule {
+    animation-delay: -1.5s;
+}
+
+.etoiles {
+    display: grid;
+    grid-template-columns: repeat(var(--cols, 2), auto);
+    gap: 0.05rem 0.15rem;
+    font-family: Arial, sans-serif;
+    font-size: calc(var(--taille) * 0.2);
+    line-height: 1;
+    color: #d10000;
+    text-shadow: 0 0 2px rgba(255, 255, 255, 0.4);
+}
+
+/* ---------- Titre et message ---------- */
+
+.erreur-titre {
+    margin: 0.5rem 0 0.5rem;
+    font-family: 'Bangers', cursive;
+    font-size: clamp(1.8rem, 6vw, 2.4rem);
+    letter-spacing: 2px;
+    color: #1a1a1a;
+    text-shadow: 2px 2px 0 #FFD700;
+}
+
+.erreur-message {
+    margin: 0 auto 1.5rem;
+    max-width: 380px;
+    color: #5a4a36;
+}
+
+.erreur-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: center;
+}
+
+/* ---------- Dragon Radar (404) ---------- */
+
+.radar {
+    position: relative;
+    width: 150px;
+    height: 150px;
+    margin: 0.5rem auto 1rem;
+    overflow: hidden;
+    border: 4px solid #1d8a5c;
+    border-radius: 50%;
+    background: radial-gradient(circle, #0b3d2a 0, #06251a 100%);
+    box-shadow:
+        0 0 18px rgba(46, 230, 140, 0.5),
+        inset 0 0 20px rgba(46, 230, 140, 0.3);
+}
+
+.radar::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(rgba(80, 255, 170, 0.3), rgba(80, 255, 170, 0.3)) center / 1px 100% no-repeat,
+        linear-gradient(rgba(80, 255, 170, 0.3), rgba(80, 255, 170, 0.3)) center / 100% 1px no-repeat,
+        repeating-radial-gradient(circle, transparent 0 17px, rgba(80, 255, 170, 0.35) 18px 19px);
+}
+
+.radar::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, rgba(80, 255, 170, 0.6), transparent 70deg);
+    animation: rotation 3s linear infinite;
+}
+
+.radar-legende {
+    margin: -0.25rem 0 1rem;
+    font-family: "Courier New", monospace;
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #1d8a5c;
+}
+
+/* ---------- Scouter (403) ---------- */
+
+.scouter {
+    max-width: 360px;
+    margin: 0.5rem auto 1.25rem;
+    padding: 0.8rem 1rem;
+    text-align: left;
+    font-family: "Courier New", monospace;
+    font-size: 0.95rem;
+    color: #5dffb0;
+    background: rgba(10, 40, 25, 0.92);
+    border: 2px solid #2fd48a;
+    border-radius: 12px;
+    box-shadow:
+        0 0 16px rgba(47, 212, 138, 0.4),
+        inset 0 0 12px rgba(47, 212, 138, 0.15);
+}
+
+.scouter .alerte {
+    color: #ff6a5d;
+    font-weight: bold;
+}
+
+.scouter .curseur {
+    display: inline-block;
+    width: 0.6em;
+    height: 1em;
+    vertical-align: text-bottom;
+    background: #5dffb0;
+    animation: clignote 1s steps(1) infinite;
+}
+
+/* ---------- Bulle Kamehameha (400) ---------- */
+
+.bulle {
+    position: relative;
+    display: inline-block;
+    max-width: 90%;
+    margin: 0.5rem auto 1.5rem;
+    padding: 0.8rem 1.4rem;
+    font-family: 'Bangers', cursive;
+    font-size: 1.5rem;
+    letter-spacing: 2px;
+    color: #1a1a1a;
+    background: #fff;
+    border: 3px solid #000;
+    border-radius: 22px;
+    box-shadow: 4px 4px 0 #000;
+}
+
+.bulle::after {
+    content: "";
+    position: absolute;
+    bottom: -18px;
+    left: 50%;
+    width: 22px;
+    height: 22px;
+    background: #fff;
+    border-right: 3px solid #000;
+    border-bottom: 3px solid #000;
+    transform: translateX(-50%) rotate(45deg);
+}
+
+/* ---------- Respect des préférences d'accessibilité ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+    .boule,
+    .erreur-code::before,
+    .radar::after,
+    .scouter .curseur {
+        animation: none;
+    }
+}
