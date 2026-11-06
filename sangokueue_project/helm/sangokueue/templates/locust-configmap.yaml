@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sangokueue-locust
+  namespace: {{ .Release.Namespace }}
+data:
+  locustfile.py: |
+{{ .Files.Get "files/locustfile.py" | indent 4 }}
+  donnees_billets.py: |
+{{ .Files.Get "files/donnees_billets.py" | indent 4 }}

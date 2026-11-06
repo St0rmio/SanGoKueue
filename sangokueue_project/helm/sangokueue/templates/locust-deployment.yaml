@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: locust
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: locust
+  template:
+    metadata:
+      labels:
+        app: locust
+    spec:
+      containers:
+        - name: locust
+          image: {{ .Values.locust.image }}
+          args:
+            - -f
+            - /mnt/locust/load/locustfile.py
+            - --host
+            - {{ printf "https://%s" .Values.ingress.host | quote }}
+            - --web-host
+            - 0.0.0.0
+          ports:
+            - name: http
+              containerPort: 8089
+          env:
+            - name: STAFF_USERNAME
+              value: {{ .Values.locust.staffUsername | quote }}
+            - name: STAFF_PASSWORD
+              value: {{ .Values.locust.staffPassword | quote }}
+          volumeMounts:
+            - name: scenario
+              mountPath: /mnt/locust
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: scenario
+          configMap:
+            name: sangokueue-locust
+            items:
+              - key: locustfile.py
+                path: load/locustfile.py
+              - key: donnees_billets.py
+                path: home/donnees_billets.py

@@ -13,6 +13,11 @@ redis:
   image: redis:8-alpine
   url: redis://redis:6379/0
 
+locust:
+  image: locustio/locust:2.47.0
+  staffUsername: admin
+  staffPassword: admin
+
 database:
   host: db
   port: "5432"
@@ -42,5 +47,5 @@ autoscaling:
   maxReplicas: 10
   targetCPUUtilizationPercentage: 60
 
-  networkPolicy:
+networkPolicy:
   enabled: false
