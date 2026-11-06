@@ -129,7 +129,7 @@ Met en pause ou reprend une file d’attente.
 
 ## Modèle de données : 
 
-![Modèle de données](./modele_bdd.png)
+![Modèle de données](./images/modele_bdd.png)
 
 
 ## Pages de l’application : 
