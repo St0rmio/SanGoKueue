@@ -137,6 +137,17 @@ def _exclure_de_la_file(entree):
     return ticket_id
 
 
+def _sous_verrou(nom, action):
+    """Exécute action si le verrou Redis est libre. None sinon."""
+    pris = queues.essayer_verrou(nom or "*")
+    if pris is None:
+        return None
+    try:
+        return action()
+    finally:
+        queues.relacher_verrou(*pris)
+
+
 def expirer_appels(queue=None):
     """1ère absence → fin de file ; 2ème absence → exclusion."""
     maintenant = timezone.now()
@@ -148,26 +159,30 @@ def expirer_appels(queue=None):
         if etat is not None and etat.en_pause:
             return vide
 
-    renvoyes = set()
-    exclus = set()
-    with transaction.atomic():
-        appeles = list(
-            EnFile.objects.select_for_update()
-            .filter(**filtres)
-            .select_related("numero_de_billet")
-        )
-        for entree in appeles:
-            etat = EtatFile.objects.filter(nom_file=entree.nom_file).first()
-            if etat is not None and etat.en_pause:
-                continue
-            restant = _secondes_restantes_appel(entree, etat, maintenant)
-            if restant != 0:
-                continue
-            if entree.deja_appele:
-                exclus.add(_exclure_de_la_file(entree))
-            else:
-                renvoyes.add(_renvoyer_en_fin_de_file(entree, maintenant))
-    return {"renvoyes": renvoyes, "exclus": exclus}
+    def modifier():
+        renvoyes = set()
+        exclus = set()
+        with transaction.atomic():
+            appeles = list(
+                EnFile.objects.select_for_update()
+                .filter(**filtres)
+                .select_related("numero_de_billet")
+                .order_by("pk")
+            )
+            for entree in appeles:
+                etat = EtatFile.objects.filter(nom_file=entree.nom_file).first()
+                if etat is not None and etat.en_pause:
+                    continue
+                restant = _secondes_restantes_appel(entree, etat, maintenant)
+                if restant != 0:
+                    continue
+                if entree.deja_appele:
+                    exclus.add(_exclure_de_la_file(entree))
+                else:
+                    renvoyes.add(_renvoyer_en_fin_de_file(entree, maintenant))
+        return {"renvoyes": renvoyes, "exclus": exclus}
+
+    return _sous_verrou(queue, modifier) or vide
 
 
 def appeler_suivants(queue, nombre=None):
@@ -182,24 +197,32 @@ def appeler_suivants(queue, nombre=None):
         return []
 
     maintenant = timezone.now()
-    appeles = []
-    with transaction.atomic():
-        entrees = list(
-            EnFile.objects.select_for_update()
-            .filter(nom_file=queue, appele=False)
-            .select_related("numero_de_billet")
-        )
-        ordre = _ordre_attente(entrees, etat, maintenant)[:a_appeler]
-        for suivant in ordre:
-            suivant.appele = True
-            suivant.date_appel = maintenant
-            suivant.secondes_pause_appel = 0
-            suivant.save(update_fields=[
-                "appele",
-                "date_appel",
-                "secondes_pause_appel",
-            ])
-            appeles.append(suivant)
+
+    def modifier():
+        nouveaux = []
+        with transaction.atomic():
+            entrees = list(
+                EnFile.objects.select_for_update()
+                .filter(nom_file=queue, appele=False)
+                .select_related("numero_de_billet")
+                .order_by("pk")
+            )
+            ordre = _ordre_attente(entrees, etat, maintenant)[:a_appeler]
+            for suivant in ordre:
+                suivant.appele = True
+                suivant.date_appel = maintenant
+                suivant.secondes_pause_appel = 0
+                suivant.save(update_fields=[
+                    "appele",
+                    "date_appel",
+                    "secondes_pause_appel",
+                ])
+                nouveaux.append(suivant)
+        return nouveaux
+
+    appeles = _sous_verrou(queue, modifier)
+    if not appeles:
+        return []
 
     for suivant in appeles:
         ticket_id = suivant.numero_de_billet_id
