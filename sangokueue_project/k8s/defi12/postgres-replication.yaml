@@ -1,0 +1,219 @@
+# CSC8567 Défi 12 : paire de démonstration isolée de la base SanGoKueue.
+# Prérequis : Secret defi12-pg-auth (postgres-password, replication-password).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: defi12-pg-init
+  namespace: n-grp3
+data:
+  01-replication.sh: |
+    #!/bin/sh
+    set -eu
+    psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
+    \getenv repl_password REPLICATION_PASSWORD
+    CREATE ROLE defi12_repl WITH LOGIN REPLICATION PASSWORD :'repl_password';
+    SQL
+    printf '\nhost replication defi12_repl all scram-sha-256\n' >> "$PGDATA/pg_hba.conf"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: defi12-pg-primary
+  namespace: n-grp3
+spec:
+  clusterIP: None
+  selector:
+    app: defi12-pg-primary
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: defi12-pg-primary
+  namespace: n-grp3
+spec:
+  serviceName: defi12-pg-primary
+  replicas: 1
+  selector:
+    matchLabels:
+      app: defi12-pg-primary
+  template:
+    metadata:
+      labels:
+        app: defi12-pg-primary
+    spec:
+      securityContext:
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          args: [postgres, -c, wal_level=replica, -c, max_wal_senders=4, -c, wal_keep_size=16MB]
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_DB
+              value: postgres
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_INITDB_ARGS
+              value: '--auth-host=scram-sha-256 --auth-local=trust'
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: defi12-pg-auth
+                  key: postgres-password
+            - name: REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: defi12-pg-auth
+                  key: replication-password
+          readinessProbe:
+            exec:
+              command: [pg_isready, -h, 127.0.0.1, -p, '5432', -U, postgres, -d, postgres, -t, '2']
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            requests: {cpu: 100m, memory: 100Mi}
+            limits: {cpu: 300m, memory: 200Mi}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+      volumes:
+        - name: init
+          configMap:
+            name: defi12-pg-init
+            defaultMode: 0555
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        storageClassName: longhorn
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: defi12-pg-replica
+  namespace: n-grp3
+spec:
+  clusterIP: None
+  selector:
+    app: defi12-pg-replica
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: defi12-pg-replica
+  namespace: n-grp3
+spec:
+  serviceName: defi12-pg-replica
+  replicas: 1
+  selector:
+    matchLabels:
+      app: defi12-pg-replica
+  template:
+    metadata:
+      labels:
+        app: defi12-pg-replica
+    spec:
+      securityContext:
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+      initContainers:
+        - name: seed
+          image: postgres:15-alpine
+          command: [sh, -ec]
+          args:
+            - |
+              umask 077
+              printf 'defi12-pg-primary:5432:*:defi12_repl:%s\n' "$REPLICATION_PASSWORD" > /replication-auth/.pgpass
+              if [ -s "$PGDATA/PG_VERSION" ] && [ -f "$PGDATA/standby.signal" ]; then
+                exit 0
+              fi
+              if [ -e "$PGDATA" ]; then
+                echo "Répertoire PostgreSQL existant non reconnu : arrêt sans écrasement." >&2
+                exit 1
+              fi
+              attempts=0
+              until pg_isready -h defi12-pg-primary -p 5432 -U defi12_repl -d postgres -t 2; do
+                attempts=$((attempts + 1))
+                if [ "$attempts" -ge 90 ]; then exit 1; fi
+                sleep 2
+              done
+              stage=$(mktemp -d /var/lib/postgresql/data/seed.XXXXXX)
+              trap 'rm -rf "$stage"' EXIT
+              pg_basebackup \
+                --dbname='host=defi12-pg-primary port=5432 user=defi12_repl passfile=/replication-auth/.pgpass application_name=defi12-pg-replica' \
+                --pgdata="$stage" --wal-method=stream --write-recovery-conf --no-password
+              mv "$stage" "$PGDATA"
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: defi12-pg-auth
+                  key: replication-password
+          resources:
+            requests: {cpu: 100m, memory: 100Mi}
+            limits: {cpu: 300m, memory: 200Mi}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: replication-auth
+              mountPath: /replication-auth
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          args: [postgres, -c, hot_standby=on]
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command: [pg_isready, -h, 127.0.0.1, -p, '5432', -U, postgres, -d, postgres, -t, '2']
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            requests: {cpu: 100m, memory: 100Mi}
+            limits: {cpu: 300m, memory: 200Mi}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: replication-auth
+              mountPath: /replication-auth
+              readOnly: true
+      volumes:
+        - name: replication-auth
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        storageClassName: longhorn
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 256Mi
