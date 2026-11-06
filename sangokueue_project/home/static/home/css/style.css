@@ -113,7 +113,7 @@ body.home-shenron {
    ZONE CAMERA
    ========================= */
 
-   #qr-reader {
+.qr-scanner-container #qr-reader {
     position: absolute !important;
 
     top: 50% !important;
@@ -337,7 +337,7 @@ body.home-shenron {
     }
 
 
-    #qr-reader {
+    .qr-scanner-container #qr-reader {
         width: 75% !important;
         height: auto !important;
 
@@ -386,7 +386,7 @@ body.home-shenron {
     }
 
 
-    #qr-reader {
+    .qr-scanner-container #qr-reader {
         width: 76% !important;
         height: auto !important;
 
@@ -398,4 +398,17 @@ body.home-shenron {
     object-fit: cover !important;
     width: 100% !important;
     height: 100% !important;
+}
+
+/* Le scanner de l'accueil reste dans la carte, sous le titre. */
+#qr-reader.camera-box {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    transform: none !important;
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 1 / 1 !important;
+    margin: 0 auto 0.5rem !important;
+    background: #111 !important;
 }

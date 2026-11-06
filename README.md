@@ -5,6 +5,55 @@ Adel KHALDOUN, Niels LALIN, Rabah NINI, Kévin PETIT, Mattéo RIQUE
 
 **Application web cross-platform de gestion de file virtuelle**
 
+
+## Lancement Docker pour test 
+
+A la racine du projet :
+
+```bash
+## docker_test.sh
+cd sangokueue_project
+cp .env.example .env
+docker compose up --build
+```
+
+Une fois le conteneur en état de marche complet :
+
+### Accès au site SanGoKueue en tant que visiteur  
+
+Se rendre sur [http://localhost](http://localhost) ou [http://localhost/home](http://localhost/home)
+
+![Page Home](./images/page_home.png)
+
+Scanner un des QR codes de `sangokueue_project/billets` ou entrer l'un des ID de billet de `sangokueue_project/home/donnees_billets.py` pour accéder à la file d'attente
+
+![Page File](./images/page_file.png)
+
+### Accès à l'interface staff SanGoKueue
+
+Se rendre sur [http://localhost/staff](http://localhost/staff) 
+
+![Page Login](./images/page_login.png)
+
+Se connecter avec l'identifiant "**admin**" et le mot de passe "**admin**" (si les paramètres par défaut ont été conservés dans le `.env`) 
+
+![Page Staff](./images/page_staff.png)
+
+### Accès à Locust pour test de traffic 
+
+Se rendre sur [http://localhost:8089](http://localhost:8089) et conserver `http://web:8000` comme Host
+
+![Page Locust](./images/page_locust.png)
+
+Voici un exemple de résultat de test en local, qui se solde par une augmentation notable du temps de réponse lorsque le traffic est simulé :
+
+![Locust local](./images/locust_local.jpeg)
+
+Voici un autre exemple plus concluant de test de traffic sur le cluster Kubernetes du site, qui soutient bien mieux la charge qu'on lui impose :
+
+![Locust cluster](./images/locust_cluster.jpeg)
+
+
 ## Fonctionnalités clés : 
 - Scan du QR code unique du billet de l’utilisateur pour le faire intégrer la file d’attente
 - Gestion des priorités QoS pour appeler dans l’ordre : Super Saiyan quoi qu’il arrive, Saiyan pour leur garantir un temps d’attente inférieur à 30 minutes, Humain
@@ -129,7 +178,7 @@ Met en pause ou reprend une file d’attente.
 
 ## Modèle de données : 
 
-![Modèle de données](./modele_bdd.png)
+![Modèle de données](./images/modele_bdd.png)
 
 
 ## Pages de l’application : 
@@ -138,24 +187,3 @@ Met en pause ou reprend une file d’attente.
 - Interface visiteur une fois le billet scanné avec temps estimé avant appel dans l’attraction et bouton pour pouvoir quitter la file
 - Interface connexion staff avec identifiant et mot de passe sur une URL dédiée staff
 - Interface gestion staff avec possibilité de mettre en pause la queue, de la vider, de supprimer certains visiteurs de la file d’attente
-
-
-## Lancement avec Docker : 
-
-Dans le dossier `sangokueue_project` :
-```sh
-docker compose up --build
-```
-
-Pour peupler la base de données avec les billets de test
-```sh
-# à exécuter dans un autre terminal pendant que le conteneur tourne
-docker compose exec web python manage.py peupler_billets
-```
-
-Pour se connecter au site local dans son navigateur, aller à l'adresse [localhost:8000](localhost:8000)
-
-Pour nettoyer le conteneur :
-```
-docker compose down -v
-``` 

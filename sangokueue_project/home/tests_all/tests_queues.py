@@ -86,9 +86,14 @@ class _FakeRedis:
     def exists(self, name):
         return int(name in self._kv or name in self._zsets)
 
-    def set(self, name, value):
+    def set(self, name, value, nx=False, ex=None):
+        if nx and name in self._kv:
+            return None
         self._kv[name] = value
         return True
+
+    def get(self, name):
+        return self._kv.get(name)
 
     def lock(self, *args, **kwargs):
         return nullcontext()
