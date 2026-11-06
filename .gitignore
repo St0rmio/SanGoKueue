@@ -152,3 +152,6 @@ GitHub.sublime-settings
 
 # Secrets Kubernetes locaux
 /sangokueue_project/k8s/secret.yaml
+
+# Identifiants générés pour Locust
+/sangokueue_project/load/billets.txt

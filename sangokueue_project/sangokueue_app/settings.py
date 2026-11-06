@@ -60,7 +60,7 @@ render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "").strip()
 if render_host and render_host not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(render_host)
 if not IS_PRODUCTION:
-    for host in ("localhost", "127.0.0.1"):
+    for host in ("localhost", "127.0.0.1", "web"):
         if host not in ALLOWED_HOSTS:
             ALLOWED_HOSTS.append(host)
 
