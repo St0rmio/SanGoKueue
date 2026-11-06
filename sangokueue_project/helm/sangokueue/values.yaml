@@ -2,7 +2,7 @@ replicaCount: 3
 
 image:
   repository: rabahnini2004/sangokueue
-  tag: v2
+  tag: v6
 
 postgres:
   image: postgres:15-alpine
@@ -38,8 +38,8 @@ resources:
     cpu: 100m
     memory: 100Mi
   limits:
-    cpu: 200m
-    memory: 200Mi
+    cpu: 500m
+    memory: 512Mi
 
 autoscaling:
   enabled: false
