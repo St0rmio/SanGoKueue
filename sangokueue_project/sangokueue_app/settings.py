@@ -38,7 +38,7 @@ IS_PRODUCTION = ENV == "production"
 
 # Variables de .env en production
 REDIS_HOST = os.environ.get('REDIS_HOST', '127.0.0.1')
-REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD', 'ar3lm4nb8pa0!')
+REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD', '')
 
 
 # Quick-start development settings - unsuitable for production

@@ -1,0 +1,46 @@
+replicaCount: 3
+
+image:
+  repository: rabahnini2004/sangokueue
+  tag: v2
+
+postgres:
+  image: postgres:15-alpine
+  replicaCount: 1
+  storage: 100Mi
+
+redis:
+  image: redis:8-alpine
+  url: redis://redis:6379/0
+
+database:
+  host: db
+  port: "5432"
+  name: sangokueue_db
+  user: sango_user
+
+secretName: sangokueue-secrets
+
+ingress:
+  className: nginx
+  host: django.grp3.csc8567.luxbulb.org
+
+allowedHosts: django.grp3.csc8567.luxbulb.org,net4255.luxbulb.org,127.0.0.1,localhost
+csrfTrustedOrigins: https://django.grp3.csc8567.luxbulb.org,https://net4255.luxbulb.org,http://127.0.0.1:8001
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 100Mi
+  limits:
+    cpu: 200m
+    memory: 200Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 60
+
+  networkPolicy:
+  enabled: false

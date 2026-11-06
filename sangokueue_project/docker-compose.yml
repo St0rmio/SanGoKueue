@@ -14,11 +14,11 @@ services:
     env_file:
       - .env
     environment:
-      - REDIS_URL=redis://:ar3lm4nb8pa0!@redis:6379/0
-      - DATABASE_URL=postgres://sango_user:sango_pass@db:5432/sangokueue_db
-      - POSTGRES_DB=sangokueue_db
-      - POSTGRES_USER=sango_user
-      - POSTGRES_PASSWORD=sango_pass
+      - REDIS_URL=${REDIS_URL}
+      - DATABASE_URL=${DATABASE_URL}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
     depends_on:
@@ -36,9 +36,11 @@ services:
   redis:
     image: redis:8-alpine
     container_name: sangokueue_redis
-    command: redis-server --requirepass "ar3lm4nb8pa0!"
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    command: redis-server --requirepass "$$REDIS_PASSWORD"
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a 'ar3lm4nb8pa0!' --no-auth-warning ping | grep -q PONG"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -49,13 +51,13 @@ services:
     image: postgres:15-alpine
     container_name: sangokueue_postgres
     environment:
-      - POSTGRES_DB=sangokueue_db
-      - POSTGRES_USER=sango_user
-      - POSTGRES_PASSWORD=sango_pass
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "sango_user", "-d", "sangokueue_db"]
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 10
