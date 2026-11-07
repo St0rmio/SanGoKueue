@@ -29,15 +29,27 @@ Scanner un des QR codes de `sangokueue_project/billets` ou entrer l'un des ID de
 
 ![Page File](./images/page_file.png)
 
+Cliquer sur "activer les notifications" pour recevoir sur PC ou téléphone la notification d'appel dans l'attraction (qui a lieu lorsque suffisamment de places sont disponibles dans l'attraction par rapport à la place d'attente de l'utilisateur)
+
+![Notification Windows](./images/notification_windows.jpeg)
+
+![Notification Android](./images/notification_android.jpeg)
+
+
 ### Accès à l'interface staff SanGoKueue
 
 Se rendre sur [http://localhost/staff](http://localhost/staff) 
 
-![Page Login](./images/page_login.png)
+![Login Staff](./images/login_staff.png)
 
 Se connecter avec l'identifiant "**admin**" et le mot de passe "**admin**" (si les paramètres par défaut ont été conservés dans le `.env`) 
 
 ![Page Staff](./images/page_staff.png)
+
+Scanner ou entrer le code de billets visiteurs dans la file pour les faire accéder à l'attraction dans la limite des 50 places disponibles (dans laquelle ils passeront entre 30s et 1mn 30s avant de la quitter)
+
+![Scan Staff](./images/scan_staff.png)
+
 
 ### Accès à Locust pour test de traffic 
 
@@ -52,6 +64,19 @@ Voici un exemple de résultat de test en local, qui se solde par une augmentatio
 Voici un autre exemple plus concluant de test de traffic sur le cluster Kubernetes du site, qui soutient bien mieux la charge qu'on lui impose :
 
 ![Locust cluster](./images/locust_cluster.jpeg)
+
+
+### Accès à l'interface admin Django
+
+Se rendre sur [http://localhost/admin](http://localhost/admin)
+
+![Login Admin](./images/login_admin.png)
+
+Se connecter avec l'identifiant "**admin**" et le mot de passe "**admin**" (si les paramètres par défaut ont été conservés dans le `.env`) 
+
+![Page Admin](./images/page_admin.png)
+
+Sur cette page, vous pouver lire et modifier les enregistrements de la base de données.
 
 
 ## Fonctionnalités clés : 
